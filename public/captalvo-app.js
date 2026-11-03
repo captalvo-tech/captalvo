@@ -50,6 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshInstalledAssets();
     setupUIEventListeners();
     applyStoredSettings();
+    initDevConsole();
+    initFpsMonitor();
 });
 
 // -----------------------------------------------------------------------------
@@ -330,8 +332,14 @@ async function startGame() {
     // Configure Emscripten Module
     window.Module = {
         canvas: document.getElementById('canvas'),
-        print: (text) => console.log('[ZeroHour-WASM]', text),
-        printErr: (text) => console.warn('[ZeroHour-WASM]', text),
+        print: (text) => {
+            console.log('[ZeroHour-WASM]', text);
+            if (DevConsole) DevConsole.write(text);
+        },
+        printErr: (text) => {
+            console.warn('[ZeroHour-WASM]', text);
+            if (DevConsole) DevConsole.write(text, 'log-err');
+        },
         onRuntimeInitialized: () => {
             console.log('[Captalvo] Runtime WASM inicializado com sucesso.');
             progressFill.style.width = '100%';
@@ -399,6 +407,25 @@ function setupUIEventListeners() {
     document.getElementById('btn-import-assets').addEventListener('click', () => openModal('modal-import'));
     document.getElementById('btn-settings').addEventListener('click', () => openModal('modal-settings'));
     document.getElementById('btn-info').addEventListener('click', () => openModal('modal-info'));
+    document.getElementById('btn-diag').addEventListener('click', async () => {
+        openModal('modal-diag');
+        await CaptalvoDiagnostics.renderDiagnosticsUI();
+    });
+    document.getElementById('btn-toggle-console').addEventListener('click', () => {
+        DevConsole.toggle();
+    });
+    document.getElementById('btn-game-console').addEventListener('click', () => {
+        DevConsole.toggle();
+    });
+    document.getElementById('dev-console-close').addEventListener('click', () => {
+        DevConsole.close();
+    });
+    document.getElementById('btn-run-diag').addEventListener('click', async () => {
+        await CaptalvoDiagnostics.renderDiagnosticsUI();
+    });
+    document.getElementById('btn-copy-diag-report').addEventListener('click', async () => {
+        await CaptalvoDiagnostics.copyReportToClipboard();
+    });
 
     document.getElementById('btn-pick-folder').addEventListener('click', handleDirectoryImport);
     document.getElementById('btn-pick-files').addEventListener('click', () => {
@@ -492,3 +519,446 @@ function applyStoredSettings() {
     const edgeScroll = localStorage.getItem('captalvo_edge_scroll') !== '0';
     document.getElementById('setting-edge-scroll').checked = edgeScroll;
 }
+
+// =============================================================================
+// CAPTALVO DIAGNOSTICS & SYSTEM TELEMETRY
+// =============================================================================
+const CaptalvoDiagnostics = {
+    async getGpuInfo() {
+        const info = {
+            api: 'WebGL 2.0',
+            vendor: 'Desconhecido',
+            renderer: 'Desconhecido',
+            maxTextureSize: 0,
+            status: 'ok'
+        };
+
+        try {
+            const tempCanvas = document.createElement('canvas');
+            const gl = tempCanvas.getContext('webgl2') || tempCanvas.getContext('webgl');
+            if (gl) {
+                const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                if (ext) {
+                    info.vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || 'Genérico';
+                    info.renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || 'Acelerador WebGL';
+                }
+                info.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+                info.api = gl.getParameter(gl.VERSION) || 'WebGL 2.0';
+            } else {
+                info.status = 'bad';
+                info.renderer = 'Não suportado no navegador';
+            }
+        } catch (e) {
+            info.status = 'warn';
+            info.renderer = 'Restrito pelo navegador';
+        }
+        return info;
+    },
+
+    getAudioInfo() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+            return { state: 'Não suportado', sampleRate: 'N/A', status: 'bad' };
+        }
+        try {
+            const ctx = new AudioCtx();
+            const state = ctx.state;
+            const rate = ctx.sampleRate + ' Hz';
+            ctx.close().catch(() => {});
+            return { state, sampleRate: rate, status: 'ok' };
+        } catch (e) {
+            return { state: 'Restrito', sampleRate: '44100 Hz', status: 'warn' };
+        }
+    },
+
+    getMemoryInfo() {
+        const res = { wasmHeap: 'Dinâmico', jsHeap: 'N/A' };
+        if (window.Module && window.Module.HEAPU8) {
+            res.wasmHeap = (window.Module.HEAPU8.byteLength / (1024 * 1024)).toFixed(0) + ' MB';
+        }
+        if (performance && performance.memory) {
+            res.jsHeap = (performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(0) + ' MB';
+        }
+        return res;
+    },
+
+    async getNetworkInfo() {
+        const start = performance.now();
+        try {
+            const r = await fetch('/api/health?t=' + Date.now(), { cache: 'no-store' });
+            const lat = Math.round(performance.now() - start);
+            if (r.ok) {
+                const data = await r.json();
+                return { latency: lat + ' ms', php: 'PHP ' + (data.php_version || '8.3'), status: 'ok' };
+            }
+        } catch (e) {}
+        return { latency: 'Erro de conexão', php: 'Indisponível', status: 'bad' };
+    },
+
+    async runFullDiagnostics() {
+        const [gpu, net] = await Promise.all([
+            this.getGpuInfo(),
+            this.getNetworkInfo()
+        ]);
+        const audio = this.getAudioInfo();
+        const mem = this.getMemoryInfo();
+
+        return {
+            timestamp: new Date().toISOString(),
+            gpu,
+            audio,
+            mem,
+            net,
+            wasm: {
+                supported: typeof WebAssembly !== 'undefined',
+                sab: typeof SharedArrayBuffer !== 'undefined',
+                coi: window.crossOriginIsolated || false
+            },
+            storage: {
+                driver: AppState.opfsSupported ? 'OPFS' : 'IndexedDB',
+                fileCount: AppState.installedFiles.size,
+                swActive: navigator.serviceWorker && !!navigator.serviceWorker.controller
+            }
+        };
+    },
+
+    async renderDiagnosticsUI() {
+        const diag = await this.runFullDiagnostics();
+
+        // GPU
+        document.getElementById('diag-gpu-api').textContent = diag.gpu.api;
+        document.getElementById('diag-gpu-vendor').textContent = diag.gpu.vendor;
+        document.getElementById('diag-gpu-renderer').textContent = diag.gpu.renderer;
+        document.getElementById('diag-gpu-max-tex').textContent = diag.gpu.maxTextureSize + 'px';
+        const gpuPill = document.getElementById('diag-gpu-pill');
+        gpuPill.className = `diag-pill ${diag.gpu.status}`;
+        gpuPill.textContent = diag.gpu.status === 'ok' ? 'ATIVO' : 'ATENÇÃO';
+
+        // WASM
+        document.getElementById('diag-wasm-status').textContent = diag.wasm.supported ? 'SIM (NATIVO)' : 'NÃO';
+        document.getElementById('diag-sab-status').textContent = diag.wasm.sab ? 'DISPONÍVEL' : 'NÃO DISPONÍVEL';
+        document.getElementById('diag-coi-status').textContent = diag.wasm.coi ? 'ATIVO (COOP/COEP)' : 'NÃO ISOLADO';
+        document.getElementById('diag-wasm-heap').textContent = diag.mem.wasmHeap;
+
+        // Audio
+        document.getElementById('diag-audio-state').textContent = diag.audio.state;
+        document.getElementById('diag-audio-rate').textContent = diag.audio.sampleRate;
+
+        // Storage & VFS
+        document.getElementById('diag-storage-driver').textContent = diag.storage.driver;
+        document.getElementById('diag-sw-status').textContent = diag.storage.swActive ? 'ATIVO & INTERCEPTANDO' : 'REGISTRADO';
+        document.getElementById('diag-big-count').textContent = diag.storage.fileCount + ' arquivos';
+
+        // Network
+        document.getElementById('diag-api-latency').textContent = diag.net.latency;
+        document.getElementById('diag-php-version').textContent = diag.net.php;
+        const netPill = document.getElementById('diag-backend-pill');
+        netPill.className = `diag-pill ${diag.net.status}`;
+        netPill.textContent = diag.net.status === 'ok' ? 'ONLINE' : 'FALHA';
+    },
+
+    async copyReportToClipboard() {
+        const diag = await this.runFullDiagnostics();
+        const text = `=== CAPTALVO ALPHA - RELATÓRIO DE TELEMETRIA ===
+Data: ${diag.timestamp}
+URL: https://captalvo.online
+
+[GPU / RENDERIZADOR]
+API: ${diag.gpu.api}
+Fabricante: ${diag.gpu.vendor}
+Placa: ${diag.gpu.renderer}
+Textura Máx: ${diag.gpu.maxTextureSize}px
+
+[WEBASSEMBLY & RUNTIME]
+WASM Suporte: ${diag.wasm.supported}
+SharedArrayBuffer: ${diag.wasm.sab}
+Cross-Origin Isolated: ${diag.wasm.coi}
+Heap WASM: ${diag.mem.wasmHeap}
+Heap JS: ${diag.mem.jsHeap}
+
+[ÁUDIO]
+AudioContext: ${diag.audio.state}
+Taxa: ${diag.audio.sampleRate}
+
+[VFS & ARMAZENAMENTO]
+Driver: ${diag.storage.driver}
+Arquivos .BIG: ${diag.storage.fileCount}
+Service Worker: ${diag.storage.swActive}
+
+[BACKEND HOSTINGER]
+Serviço: ${diag.net.php}
+Latência API: ${diag.net.latency}
+=================================================`;
+
+        try {
+            await navigator.clipboard.writeText(text);
+            alert('Relatório de diagnóstico copiado para a área de transferência!');
+        } catch (e) {
+            console.log(text);
+            alert('Relatório impresso no console do navegador.');
+        }
+    }
+};
+
+// =============================================================================
+// DEVELOPER CONSOLE (Backtick / Tilde Command Shell)
+// =============================================================================
+const DevConsole = {
+    panel: null,
+    output: null,
+    form: null,
+    input: null,
+    history: [],
+    historyIndex: 0,
+    isOpen: false,
+
+    commands: [
+        'help', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
+        'ping', 'capture', 'cursor', 'clear', 'reload', 'close'
+    ],
+
+    init() {
+        this.panel = document.getElementById('dev-console');
+        this.output = document.getElementById('dev-console-output');
+        this.form = document.getElementById('dev-console-form');
+        this.input = document.getElementById('dev-console-input');
+
+        if (!this.panel) return;
+
+        // Command submission
+        this.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const cmd = this.input.value.trim();
+            this.input.value = '';
+            if (!cmd) return;
+
+            this.history.push(cmd);
+            this.historyIndex = this.history.length;
+            this.write(`> ${cmd}`, 'log-cmd');
+
+            await this.execute(cmd);
+        });
+
+        // History and autocomplete
+        this.input.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp' && this.historyIndex > 0) {
+                this.historyIndex--;
+                this.input.value = this.history[this.historyIndex] || '';
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                this.historyIndex = Math.min(this.historyIndex + 1, this.history.length);
+                this.input.value = this.history[this.historyIndex] || '';
+                e.preventDefault();
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const term = this.input.value.trim().toLowerCase();
+                const matches = this.commands.filter(c => c.startsWith(term));
+                if (matches.length === 1) {
+                    this.input.value = matches[0] + ' ';
+                } else if (matches.length > 1) {
+                    this.write(`Comandos: ${matches.join('  ')}`, 'log-ok');
+                }
+            }
+        });
+
+        // Capture phase keydown for ~ / Backtick and Escape
+        window.addEventListener('keydown', (e) => {
+            if ((e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === 'F2') && !e.repeat) {
+                // Avoid capturing when typing inside normal inputs other than console
+                if (e.target && e.target !== this.input && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                this.toggle();
+                return;
+            }
+
+            if (this.isOpen) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.close();
+                }
+                e.stopImmediatePropagation();
+            }
+        }, { capture: true });
+
+        this.write('Captalvo Diagnostic Console initialized. Digite "help" para ver os comandos.', 'log-ok');
+    },
+
+    write(msg, className = '') {
+        const span = document.createElement('div');
+        if (className) span.className = className;
+        span.textContent = msg;
+        this.output.appendChild(span);
+        this.output.scrollTop = this.output.scrollHeight;
+    },
+
+    open() {
+        this.panel.hidden = false;
+        this.isOpen = true;
+        if (document.exitPointerLock) document.exitPointerLock();
+        setTimeout(() => this.input.focus(), 50);
+    },
+
+    close() {
+        this.panel.hidden = true;
+        this.isOpen = false;
+        this.input.blur();
+    },
+
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    },
+
+    async execute(cmdLine) {
+        const parts = cmdLine.split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+        const args = parts.slice(1);
+
+        switch (cmd) {
+            case 'help':
+                this.write(`Comandos disponíveis:
+  status       - Exibe resumo em tempo real do motor, áudio, memória e canvas
+  diag         - Executa diagnóstico completo de hardware, WebAssembly e rede
+  gpu          - Exibe detalhes do adaptador WebGL 2.0 e placa de vídeo
+  vfs          - Lista todos os arquivos .BIG registrados no OPFS
+  audio        - Exibe telemetria do subsistema de som
+  mem          - Informações de uso de memória WASM e heap JS
+  fps [num]    - Consulta ou ajusta o limitador de taxa de quadros (30/60/120)
+  ping         - Testa latência direta da API PHP 8.3 (/api/health)
+  capture      - Captura screenshot diagnóstica do canvas
+  cursor free  - Força liberação do confinamento do ponteiro
+  clear        - Limpa o histórico de mensagens do console
+  reload       - Recarrega a aplicação
+  close        - Fecha este painel (ou pressione \` ou Esc)`);
+                break;
+
+            case 'status':
+                const fps = document.getElementById('game-fps-counter').textContent;
+                this.write(`STATUS: JogoRodando=${AppState.isGameRunning} | FPS=${fps} | OPFS=${AppState.installedFiles.size} arquivos | Backend=${AppState.backendHealthy ? 'Online' : 'Falha'}`, 'log-ok');
+                break;
+
+            case 'diag':
+                this.write('Executando diagnóstico do sistema...', 'log-warn');
+                const d = await CaptalvoDiagnostics.runFullDiagnostics();
+                this.write(`GPU: ${d.gpu.renderer} (${d.gpu.vendor})
+WASM: Suportado=${d.wasm.supported} | SAB=${d.wasm.sab} | COI=${d.wasm.coi}
+ÁUDIO: ${d.audio.state} (${d.audio.sampleRate})
+VFS: ${d.storage.driver} com ${d.storage.fileCount} arquivos
+API: ${d.net.php} - Latência: ${d.net.latency}`, 'log-ok');
+                break;
+
+            case 'gpu':
+                const gpu = await CaptalvoDiagnostics.getGpuInfo();
+                this.write(`GPU / WebGL2:
+  API: ${gpu.api}
+  Fabricante: ${gpu.vendor}
+  Renderizador: ${gpu.renderer}
+  Textura Máx: ${gpu.maxTextureSize}px`, 'log-ok');
+                break;
+
+            case 'vfs':
+                this.write(`Arquivos .BIG armazenados (${AppState.installedFiles.size}):`);
+                for (const item of REQUIRED_ASSETS) {
+                    const found = AppState.installedFiles.has(item.name) || AppState.installedFiles.has(item.name.toLowerCase());
+                    this.write(`  [${found ? 'OK' : 'MISSING'}] ${item.name} (${item.desc})`, found ? 'log-ok' : 'log-err');
+                }
+                break;
+
+            case 'audio':
+                const aud = CaptalvoDiagnostics.getAudioInfo();
+                this.write(`Áudio: Estado=${aud.state} | SampleRate=${aud.sampleRate}`, 'log-ok');
+                break;
+
+            case 'mem':
+                const mem = CaptalvoDiagnostics.getMemoryInfo();
+                this.write(`Memória: Heap WASM=${mem.wasmHeap} | Heap JS=${mem.jsHeap}`, 'log-ok');
+                break;
+
+            case 'fps':
+                if (args[0]) {
+                    const limit = parseInt(args[0], 10);
+                    localStorage.setItem('captalvo_fps', String(limit));
+                    document.getElementById('setting-fps').value = String(limit);
+                    this.write(`Limitador de FPS ajustado para: ${limit}`, 'log-ok');
+                } else {
+                    const cur = localStorage.getItem('captalvo_fps') || '60';
+                    this.write(`Limite atual de FPS: ${cur}`);
+                }
+                break;
+
+            case 'ping':
+                this.write('Enviando requisição de ping para https://captalvo.online/api/health...');
+                const net = await CaptalvoDiagnostics.getNetworkInfo();
+                this.write(`Resposta da API: ${net.php} em ${net.latency}`, net.status === 'ok' ? 'log-ok' : 'log-err');
+                break;
+
+            case 'cursor':
+                if (document.exitPointerLock) document.exitPointerLock();
+                this.write('Ponteiro liberado com sucesso.', 'log-ok');
+                break;
+
+            case 'capture':
+                const canvas = document.getElementById('canvas');
+                if (canvas) {
+                    try {
+                        const url = canvas.toDataURL('image/png');
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `captalvo-capture-${Date.now()}.png`;
+                        a.click();
+                        this.write(`Screenshot capturada (${canvas.width}x${canvas.height}).`, 'log-ok');
+                    } catch (e) {
+                        this.write('Erro capturando canvas: ' + e.message, 'log-err');
+                    }
+                }
+                break;
+
+            case 'clear':
+                this.output.innerHTML = '';
+                break;
+
+            case 'reload':
+                location.reload();
+                break;
+
+            case 'close':
+                this.close();
+                break;
+
+            default:
+                this.write(`Comando não reconhecido: "${cmd}". Digite "help" para ver as opções.`, 'log-err');
+        }
+    }
+};
+
+function initDevConsole() {
+    DevConsole.init();
+}
+
+// =============================================================================
+// FPS MONITOR HUD
+// =============================================================================
+function initFpsMonitor() {
+    const el = document.getElementById('game-fps-counter');
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    function tick(now) {
+        frameCount++;
+        if (now - lastTime >= 1000) {
+            const fps = Math.round((frameCount * 1000) / (now - lastTime));
+            if (el) el.textContent = `${fps} FPS`;
+            frameCount = 0;
+            lastTime = now;
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+

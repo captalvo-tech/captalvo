@@ -53,3 +53,4 @@ graph TD
 - Os arquivos são salvos diretamente no **Origin Private File System (OPFS)** do navegador do usuário.
 - O **Service Worker** do Captalvo intercepta requisições `GET /assets/*.big` que contenham o cabeçalho `Range: bytes=start-end`, lê a fatia correspondente diretamente do arquivo salvo no OPFS e devolve HTTP `206 Partial Content`.
 - **Zero tráfego de rede** contendo mídia proprietária é enviado para o servidor Hostinger.
+

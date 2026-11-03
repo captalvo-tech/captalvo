@@ -43,3 +43,4 @@ Preservando o modo original para regressão, introduz-se a mecânica inicial de 
 - Registro e autenticação de comandantes via API PHP 8.3 + MySQL.
 - Mapa global tático com demarcação territorial persistente.
 - Batalhas de fronteira e alianças de clãs.
+

@@ -14,9 +14,24 @@
         <canvas id="canvas" tabindex="-1" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
     </div>
 
+    <!-- Backtick Developer Diagnostic Console -->
+    <div id="dev-console" hidden class="dev-console-panel">
+        <div class="dev-console-header">
+            <span>CAPTALVO // DIAGNOSTIC CONSOLE &mdash; (PRESSIONE ` OU ESC PARA FECHAR)</span>
+            <button id="dev-console-close" class="dev-console-close" type="button">&times;</button>
+        </div>
+        <pre id="dev-console-output"></pre>
+        <form id="dev-console-form" class="dev-console-form">
+            <span class="prompt">&gt;</span>
+            <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'status', 'diag', 'gpu', 'vfs'...">
+        </form>
+    </div>
+
     <!-- In-Game Floating Escape Bar -->
     <div id="game-escape-bar">
         <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
+        <button id="btn-game-console" type="button">💻 Console [ ~ ]</button>
+        <span id="game-fps-counter" class="game-hud-fps">-- FPS</span>
     </div>
 
     <!-- Captalvo Main Shell Overlay -->
@@ -59,6 +74,12 @@
                 </button>
 
                 <div class="button-grid">
+                    <button id="btn-diag" class="btn-secondary" type="button">
+                        🔬 Diagnósticos
+                    </button>
+                    <button id="btn-toggle-console" class="btn-secondary" type="button">
+                        💻 Console [ ~ ]
+                    </button>
                     <button id="btn-settings" class="btn-secondary" type="button">
                         ⚙️ Configurações
                     </button>
@@ -223,6 +244,89 @@
                     <strong>Marco 2:</strong> Modo de jogo Captalvo com mecânica de Trabalhador inicial (inspiração Worker GLA), demarcação de território com bandeira e construção de abrigo básico.<br>
                     <strong>Marco 3:</strong> Persistência de mundo e economia global via backend PHP 8.3 e MySQL.
                 </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: System Diagnostics -->
+    <div id="modal-diag" class="modal-overlay">
+        <div class="modal-card" style="width: min(720px, 95vw);">
+            <div class="modal-header">
+                <h3 class="modal-title">Diagnóstico do Sistema &middot; Telemetria</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px; margin-bottom:14px;">
+                    Painel de conformidade técnica para execução do motor Zero Hour em WebAssembly + WebGL 2.0.
+                </p>
+
+                <div class="diag-grid">
+                    <!-- GPU & WebGL2 -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>🎮 Renderizador GPU</span>
+                            <span id="diag-gpu-pill" class="diag-pill ok">Detectando</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">API:</span><span id="diag-gpu-api" class="diag-val">WebGL 2.0</span></div>
+                        <div class="diag-row"><span class="diag-key">Fabricante:</span><span id="diag-gpu-vendor" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Placa de Vídeo:</span><span id="diag-gpu-renderer" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Textura Máx:</span><span id="diag-gpu-max-tex" class="diag-val">--</span></div>
+                    </div>
+
+                    <!-- WebAssembly & Threads -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>⚙️ Motor WebAssembly</span>
+                            <span id="diag-wasm-pill" class="diag-pill ok">Ativo</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">WASM Suporte:</span><span id="diag-wasm-status" class="diag-val">SIM</span></div>
+                        <div class="diag-row"><span class="diag-key">SharedArrayBuffer:</span><span id="diag-sab-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Cross-Origin Isolated:</span><span id="diag-coi-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Heap Memory:</span><span id="diag-wasm-heap" class="diag-val">--</span></div>
+                    </div>
+
+                    <!-- Audio -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>🔊 WebAudio Bridge</span>
+                            <span id="diag-audio-pill" class="diag-pill ok">Pronto</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">AudioContext:</span><span id="diag-audio-state" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Sample Rate:</span><span id="diag-audio-rate" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">OpenAL Bridge:</span><span class="diag-val">Emscripten AL</span></div>
+                    </div>
+
+                    <!-- Storage & VFS -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>💾 Armazenamento & VFS</span>
+                            <span id="diag-vfs-pill" class="diag-pill ok">OPFS</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">Storage Driver:</span><span id="diag-storage-driver" class="diag-val">OPFS</span></div>
+                        <div class="diag-row"><span class="diag-key">Service Worker:</span><span id="diag-sw-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Filtro Range HTTP:</span><span class="diag-val">Status 206 Local</span></div>
+                        <div class="diag-row"><span class="diag-key">Arquivos .BIG:</span><span id="diag-big-count" class="diag-val">0</span></div>
+                    </div>
+                </div>
+
+                <div class="diag-card" style="margin-bottom:16px;">
+                    <div class="diag-card-title">
+                        <span>🌐 Conectividade Backend & API</span>
+                        <span id="diag-backend-pill" class="diag-pill ok">Online</span>
+                    </div>
+                    <div class="diag-row"><span class="diag-key">Health Endpoint:</span><span class="diag-val">https://captalvo.online/api/health</span></div>
+                    <div class="diag-row"><span class="diag-key">Latência Servidor:</span><span id="diag-api-latency" class="diag-val">-- ms</span></div>
+                    <div class="diag-row"><span class="diag-key">Versão PHP:</span><span id="diag-php-version" class="diag-val">PHP 8.3</span></div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; gap:10px;">
+                    <button id="btn-run-diag" class="btn-primary" style="font-size:12px; padding:10px 16px;" type="button">
+                        🔄 Atualizar Diagnóstico
+                    </button>
+                    <button id="btn-copy-diag-report" class="btn-secondary" style="font-size:12px; padding:10px 16px;" type="button">
+                        📋 Copiar Relatório Completo
+                    </button>
+                </div>
             </div>
         </div>
     </div>
