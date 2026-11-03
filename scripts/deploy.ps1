@@ -21,8 +21,8 @@ $AppDir = Join-Path $ProjectRoot "app"
 Write-Host "==> [Captalvo Deploy] Iniciando deploy seguro para https://captalvo.online..." -ForegroundColor Cyan
 
 # 1. SSH Connectivity Check
-Write-Host "==> [1/6] Testando conexão SSH com $HostUser@$HostIp:$HostPort..."
-$testSsh = ssh -p $HostPort -o BatchMode=yes -o ConnectTimeout=5 "$HostUser@$HostIp" "echo SSH_OK"
+Write-Host "==> [1/6] Testando conexão SSH com ${HostUser}@${HostIp}:${HostPort}..."
+$testSsh = ssh -p $HostPort -o BatchMode=yes -o ConnectTimeout=5 "${HostUser}@${HostIp}" "echo SSH_OK"
 if ($testSsh -ne "SSH_OK") {
     Write-Error "Falha na conexão SSH com o servidor Hostinger."
 }
@@ -32,35 +32,41 @@ Write-Host "    Conexão SSH confirmada com sucesso." -ForegroundColor Green
 $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd_HHmmss")
 Write-Host "==> [2/6] Criando backup remoto com timestamp $Timestamp em $RemoteBackupBase..."
 $backupCmd = "mkdir -p '$RemoteBackupBase/$Timestamp' && if [ -d '$RemoteDomainPath/public_html' ]; then cp -r '$RemoteDomainPath/public_html/'* '$RemoteBackupBase/$Timestamp/' 2>/dev/null || true; fi; echo BACKUP_OK"
-$backupRes = ssh -p $HostPort "$HostUser@$HostIp" "$backupCmd"
+$backupRes = ssh -p $HostPort "${HostUser}@${HostIp}" "$backupCmd"
 Write-Host "    Resultado do backup: $backupRes" -ForegroundColor Green
 
 # 3. Create Remote Staging Directory (isolated & non-public)
 Write-Host "==> [3/6] Preparando área temporária não pública em ~/staging_captalvo..."
 $stageCmd = "rm -rf /home/$HostUser/staging_captalvo && mkdir -p /home/$HostUser/staging_captalvo/public /home/$HostUser/staging_captalvo/app && mkdir -p '$RemoteDomainPath/app' '$RemoteDomainPath/public_html'"
-ssh -p $HostPort "$HostUser@$HostIp" "$stageCmd"
+ssh -p $HostPort "${HostUser}@${HostIp}" "$stageCmd"
 
-# 4. Upload App and Public Assets to Staging via SCP / RSYNC
-Write-Host "==> [4/6] Enviando código-fonte e binários para a área de staging..."
+# 4. Pack & Upload Tar.gz Archives to Staging
+Write-Host "==> [4/6] Compactando e enviando arquivos de produção para staging..."
+$tempTarApp = Join-Path $ProjectRoot "captalvo_app.tar.gz"
+$tempTarPublic = Join-Path $ProjectRoot "captalvo_public.tar.gz"
 
-# Upload backend app/
-scp -P $HostPort -r "$AppDir"/* "$HostUser@$HostIp:/home/$HostUser/staging_captalvo/app/"
+tar.exe -czf "$tempTarApp" -C "$AppDir" .
+tar.exe -czf "$tempTarPublic" -C "$PublicDir" .
 
-# Upload public/
-scp -P $HostPort -r "$PublicDir"/* "$HostUser@$HostIp:/home/$HostUser/staging_captalvo/public/"
+scp -P $HostPort "$tempTarApp" "${HostUser}@${HostIp}:/home/$HostUser/staging_captalvo/captalvo_app.tar.gz"
+scp -P $HostPort "$tempTarPublic" "${HostUser}@${HostIp}:/home/$HostUser/staging_captalvo/captalvo_public.tar.gz"
 
-# 5. Atomic-style sync to production
-Write-Host "==> [5/6] Aplicando arquivos em produção com permissões corretas..."
+Remove-Item "$tempTarApp" -Force -ErrorAction SilentlyContinue
+Remove-Item "$tempTarPublic" -Force -ErrorAction SilentlyContinue
+
+# 5. Extract to production with correct permissions
+Write-Host "==> [5/6] Aplicando arquivos em produção com permissões seguras..."
 $applyCmd = @"
-cp -r /home/$HostUser/staging_captalvo/app/* '$RemoteDomainPath/app/' 2>/dev/null || true
-cp -r /home/$HostUser/staging_captalvo/public/* '$RemoteDomainPath/public_html/'
+tar -xzf /home/$HostUser/staging_captalvo/captalvo_app.tar.gz -C '$RemoteDomainPath/app/'
+tar -xzf /home/$HostUser/staging_captalvo/captalvo_public.tar.gz -C '$RemoteDomainPath/public_html/'
 rm -rf /home/$HostUser/staging_captalvo
 chmod 755 '$RemoteDomainPath/public_html'
 find '$RemoteDomainPath/public_html' -type f -exec chmod 644 {} +
 find '$RemoteDomainPath/public_html' -type d -exec chmod 755 {} +
+rm -f '$RemoteDomainPath/public_html/default*.php'
 echo DEPLOY_APPLIED
 "@
-$applyRes = ssh -p $HostPort "$HostUser@$HostIp" "$applyCmd"
+$applyRes = ssh -p $HostPort "${HostUser}@${HostIp}" "$applyCmd"
 Write-Host "    $applyRes" -ForegroundColor Green
 
 # 6. Verify Deployment Live
