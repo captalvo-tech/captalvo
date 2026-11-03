@@ -1,0 +1,43 @@
+# Captalvo Git Ignore
+
+# Commercial C&C Game Assets - STRICTLY EXCLUDED
+*.big
+*.BIG
+*.bik
+*.BIK
+*.data
+*.DATA
+assets/
+public/assets/
+*.map
+*.MAP
+
+# Environment & Credentials
+.env
+.env.*
+*.key
+*.pem
+*.secret
+mysql_password.php
+app/Config/database.local.php
+
+# Operating System & Editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Backups and Dumps
+_backups*/
+*.sql
+*.tar
+*.tar.gz
+*.zip
+*.bak
+
+# Node & Build caches
+node_modules/
+.pack-cache/
+dist/
+build/

@@ -1,0 +1,47 @@
+# ==============================================================================
+# Captalvo Apache Configuration
+# ==============================================================================
+
+# MIME Types
+<IfModule mod_mime.c>
+    AddType application/wasm .wasm
+    AddType application/javascript .js
+    AddType application/json .json
+    AddType text/css .css
+    AddType image/svg+xml .svg
+</IfModule>
+
+# Security & Cross-Origin Isolation (Required for SharedArrayBuffer & OPFS)
+<IfModule mod_headers.c>
+    Header set Cross-Origin-Opener-Policy "same-origin"
+    Header set Cross-Origin-Embedder-Policy "require-corp"
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json application/wasm
+</IfModule>
+
+# Options
+Options -Indexes
+DirectoryIndex index.html index.php
+
+# Routing & Rewrites
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Block access to hidden/sensitive files
+    RewriteRule ^(\.git|\.env|\.htaccess|.*\.ini|.*\.sql|.*\.bak) - [F,L]
+
+    # Route /api/health to /api/health.php
+    RewriteRule ^api/health/?$ api/health.php [L,QSA]
+
+    # Route /api/* requests to /api/index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^api/(.*)$ api/index.php [L,QSA]
+</IfModule>

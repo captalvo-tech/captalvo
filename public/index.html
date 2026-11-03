@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Captalvo — Conquista sem limites.</title>
+    <meta name="description" content="Captalvo — Simulador de Guerra Global Virtual. Baseado no motor Command & Conquer Generals Zero Hour via WebAssembly.">
+    <link rel="stylesheet" href="captalvo.css?v=0.1.0">
+</head>
+<body>
+
+    <!-- WebGL Game Canvas Container -->
+    <div id="game-container">
+        <canvas id="canvas" tabindex="-1" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
+
+    <!-- In-Game Floating Escape Bar -->
+    <div id="game-escape-bar">
+        <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
+    </div>
+
+    <!-- Captalvo Main Shell Overlay -->
+    <div id="captalvo-shell">
+        
+        <!-- Header -->
+        <header class="shell-header">
+            <h1 class="logo-title">CAPTALVO</h1>
+            <p class="logo-slogan">Conquista sem limites.</p>
+            <p class="logo-subtitle">Simulador de Guerra Global Virtual &middot; Alpha 0.1</p>
+        </header>
+
+        <!-- Center Panel -->
+        <main class="shell-center">
+            
+            <!-- Status Card -->
+            <div class="status-card">
+                <div class="status-row">
+                    <span class="status-label">Armazenamento Navegador:</span>
+                    <span id="storage-badge" class="status-badge badge-info">Detectando...</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Arquivos do Jogo (.BIG):</span>
+                    <span id="assets-badge" class="status-badge badge-missing">Verificando...</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Servidor Backend:</span>
+                    <span id="backend-badge" class="status-badge badge-info">Conectando...</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="btn-play" class="btn-primary" type="button" disabled>
+                    JOGAR CAPTALVO
+                </button>
+                
+                <button id="btn-import-assets" class="btn-secondary" type="button">
+                    📁 Importar Arquivos do Jogo
+                </button>
+
+                <div class="button-grid">
+                    <button id="btn-settings" class="btn-secondary" type="button">
+                        ⚙️ Configurações
+                    </button>
+                    <button id="btn-info" class="btn-secondary" type="button">
+                        ℹ️ Sobre a Alpha
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading Progress -->
+            <div id="progress-container">
+                <div class="progress-header">
+                    <span id="main-progress-status">INICIALIZANDO MOTOR</span>
+                </div>
+                <div class="progress-track">
+                    <div id="main-progress-fill" class="progress-fill"></div>
+                </div>
+                <div id="main-progress-detail" class="progress-detail">Carregando módulos...</div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="shell-footer">
+            <div>Captalvo &copy; 2026 &middot; Motor GPL C&amp;C Generals Zero Hour &middot; WebAssembly</div>
+            <div class="footer-links">
+                <a href="https://captalvo.online" target="_blank">captalvo.online</a>
+                <a href="https://github.com/captalvo-tech/captalvo" target="_blank" rel="noopener noreferrer">GitHub</a>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Hidden File Input for fallback selection -->
+    <input type="file" id="file-input-fallback" multiple accept=".big" style="display: none;">
+
+    <!-- Modal: Import Assets -->
+    <div id="modal-import" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Importar Arquivos do Jogo</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    Por motivos de conformidade de direitos autorais, os dados comerciais de 
+                    <strong>Command &amp; Conquer: Generals Zero Hour</strong> não são distribuídos em nosso servidor público.
+                </p>
+                <p>
+                    Selecione a pasta onde seu jogo legítimo está instalado (EA App ou Steam) para carregar os arquivos 
+                    diretamente no armazenamento privativo do seu navegador (OPFS). 
+                    <strong>Nenhum arquivo comercial é enviado para a internet.</strong>
+                </p>
+
+                <div id="import-drop-zone" class="drop-zone">
+                    <div class="drop-icon">📂</div>
+                    <strong style="display:block; margin-bottom:6px; color:var(--accent-gold);">
+                        Clique abaixo para selecionar sua pasta do jogo
+                    </strong>
+                    <span style="font-size:11px; color:var(--text-secondary);">
+                        Ex: <code>D:\Command and Conquer Generals Zero Hour</code> ou arraste arquivos <code>.big</code> aqui
+                    </span>
+                </div>
+
+                <div class="button-grid" style="margin-bottom: 14px;">
+                    <button id="btn-pick-folder" class="btn-primary" style="font-size: 13px; padding: 12px;" type="button">
+                        Selecionar Pasta Completa
+                    </button>
+                    <button id="btn-pick-files" class="btn-secondary" style="font-size: 13px; padding: 12px;" type="button">
+                        Selecionar Arquivos .BIG
+                    </button>
+                </div>
+
+                <div id="import-progress-wrap" style="display:none; margin-bottom:14px;">
+                    <div class="progress-track">
+                        <div id="import-progress-bar" class="progress-fill"></div>
+                    </div>
+                    <div id="import-progress-detail" class="progress-detail">Processando arquivos...</div>
+                </div>
+
+                <h4>Status dos Arquivos no Navegador</h4>
+                <div id="modal-asset-list" class="asset-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Settings -->
+    <div id="modal-settings" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Configurações</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>Gráficos e Desempenho</h4>
+                <div style="margin-bottom: 14px;">
+                    <label style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Limite de Taxa de Quadros (FPS):</span>
+                        <select id="setting-fps" style="background:#1a222c; color:var(--text-primary); border:1px solid var(--border-color); padding:6px 10px; border-radius:4px;">
+                            <option value="30">30 FPS (Fiel ao original)</option>
+                            <option value="60">60 FPS (Recomendado)</option>
+                            <option value="120">120 FPS (Alta taxa)</option>
+                            <option value="0">V-Sync Automático</option>
+                        </select>
+                    </label>
+                </div>
+
+                <h4>Controles e Mouse</h4>
+                <div style="margin-bottom: 12px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="setting-lock-cursor">
+                        <span>Travar ponteiro do mouse na janela do jogo (Confinamento)</span>
+                    </label>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="setting-edge-scroll" checked>
+                        <span>Rolagem de câmera nas bordas da tela (Edge Scrolling)</span>
+                    </label>
+                </div>
+
+                <h4>Armazenamento Local</h4>
+                <p style="font-size:12px;">
+                    Os arquivos do jogo e configurações ficam salvos no cache seguro do navegador (OPFS).
+                </p>
+                <button id="btn-wipe-storage" class="btn-secondary" style="border-color:var(--accent-red); color:var(--accent-red);" type="button">
+                    Limpar Todos os Dados e Arquivos Locais
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Alpha Information -->
+    <div id="modal-info" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Sobre o Captalvo Alpha</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>Visão do Projeto</h4>
+                <p>
+                    <strong>Captalvo — Simulador de Guerra Global Virtual</strong>.<br>
+                    Nosso objetivo é construir uma experiência tática de conquista territorial em larga escala, aproveitando a robustez e jogabilidade clássica do motor <em>Command &amp; Conquer: Generals Zero Hour</em> portado nativamente para a Web (WebAssembly + WebGL 2.0).
+                </p>
+
+                <h4>Base Técnica</h4>
+                <p>
+                    O cliente roda inteiramente no navegador via WebAssembly compilado a partir do código-fonte liberado pela <em>Electronic Arts</em> sob a licença GPL v3, com suporte a renderização Direct3D 8 para WebGL 2.0.
+                </p>
+
+                <h4>Aviso Legal e Direitos</h4>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+                    <em>Electronic Arts Inc.</em> não patrocinou, endossou ou aprovou este projeto de forma alguma. "Command &amp; Conquer" e "Generals Zero Hour" são marcas registradas da Electronic Arts. O projeto Captalvo não redistribui nenhum arquivo de mídia, áudio, modelo 3D ou mapa proprietário original. Todos os dados são carregados estritamente pelo próprio usuário a partir de sua cópia legítima local.
+                </p>
+
+                <h4>Roadmap da Alpha</h4>
+                <p>
+                    <strong>Marco 1:</strong> Estabilização do motor WebAssembly no domínio oficial captalvo.online.<br>
+                    <strong>Marco 2:</strong> Modo de jogo Captalvo com mecânica de Trabalhador inicial (inspiração Worker GLA), demarcação de território com bandeira e construção de abrigo básico.<br>
+                    <strong>Marco 3:</strong> Persistência de mundo e economia global via backend PHP 8.3 e MySQL.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Captalvo Application Script -->
+    <script src="captalvo-app.js?v=0.1.0"></script>
+</body>
+</html>
