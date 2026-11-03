@@ -1,23 +1,22 @@
 // ==============================================================================
-// CAPTALVO - Service Worker
+// CAPTALVO - Service Worker (Anti-Cache / Zero-Cache Edition)
 // 1. Cross-Origin Isolation (COOP/COEP)
 // 2. OPFS Local Game Assets Interceptor (HTTP Range Requests for .big archives)
+// 3. Complete Cache Annihilation: NEVER caches HTML, JS, CSS, or API calls.
 // ==============================================================================
 
-const SW_VERSION = 'captalvo-v1.0.2';
-const CACHE_NAME = `captalvo-cache-${SW_VERSION}`;
-
 self.addEventListener('install', (event) => {
+    // Instantly replace previous service workers
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         Promise.all([
+            // Claim all open windows immediately
             self.clients.claim(),
-            caches.keys().then((keys) =>
-                Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-            )
+            // Wipe EVERY single cache bucket in CacheStorage
+            caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
         ])
     );
 });
@@ -92,7 +91,7 @@ async function getOpfsFileSlice(filename, rangeHeader) {
                     'Content-Type': 'application/octet-stream',
                     'Content-Length': String(totalSize),
                     'Accept-Ranges': 'bytes',
-                    'Cache-Control': 'public, max-age=31536000, immutable',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                     'Cross-Origin-Resource-Policy': 'cross-origin'
                 }
             });
@@ -124,7 +123,7 @@ async function getOpfsFileSlice(filename, rangeHeader) {
                 'Content-Range': `bytes ${start}-${end}/${totalSize}`,
                 'Content-Length': String(contentLength),
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'public, max-age=31536000, immutable',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'Cross-Origin-Resource-Policy': 'cross-origin'
             }
         });
@@ -150,8 +149,7 @@ self.addEventListener('fetch', (event) => {
                 if (opfsResponse) {
                     return opfsResponse;
                 }
-                // Fallback to network fetch if not in OPFS
-                return fetch(request).catch(() => {
+                return fetch(request, { cache: 'no-store' }).catch(() => {
                     return new Response(
                         JSON.stringify({
                             error: 'Asset not found in OPFS',
@@ -169,21 +167,39 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 2. Cross-Origin Isolation injection for document requests
+    // 2. Navigation requests: ensure Cross-Origin Isolation headers & enforce no-cache
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request).then((response) => {
+            fetch(request, { cache: 'no-store' }).then((response) => {
                 if (response.status === 0) return response;
                 const newHeaders = new Headers(response.headers);
                 newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
                 newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
+                newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+                newHeaders.set('Pragma', 'no-cache');
 
                 return new Response(response.body, {
                     status: response.status,
                     statusText: response.statusText,
                     headers: newHeaders
                 });
-            }).catch(() => fetch(request))
+            }).catch(() => fetch(request, { cache: 'no-store' }))
         );
+        return;
     }
+
+    // 3. All other requests (JS, CSS, WASM, API, JSON): pass-through strictly without caching
+    event.respondWith(
+        fetch(request, { cache: 'no-store' }).then((response) => {
+            if (response.status === 0) return response;
+            const newHeaders = new Headers(response.headers);
+            newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            newHeaders.set('Pragma', 'no-cache');
+            return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: newHeaders
+            });
+        }).catch(() => fetch(request))
+    );
 });

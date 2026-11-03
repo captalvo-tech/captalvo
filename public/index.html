@@ -1,11 +1,133 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Captalvo — Conquista sem limites.</title>
     <meta name="description" content="Captalvo — Simulador de Guerra Global Virtual. Baseado no motor Command & Conquer Generals Zero Hour via WebAssembly.">
-    <link rel="stylesheet" href="captalvo.css?v=0.1.0">
+
+    <!-- Anti-Cache Directives (Meta Tags) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <!-- Early Anti-Cache & Timestamp Guardian Script -->
+    <script>
+    (function() {
+        var BUILD_TIME = Date.now();
+        window.__CAPTALVO_BUILD_TIME__ = BUILD_TIME;
+
+        // 1. Bfcache Killer: Force hard reload if restored from browser memory cache
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                console.warn('[Captalvo] Detectada restauração de cache (bfcache). Forçando reload...');
+                window.location.reload();
+            }
+        });
+
+        // 2. Dynamic timestamp helper
+        function appendTimestamp(url) {
+            if (!url || typeof url !== 'string') return url;
+            if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                if (!url.includes(window.location.host)) return url; // External CDN/link
+            }
+            var sep = url.indexOf('?') === -1 ? '?' : '&';
+            if (/[?&](t|_t|v)=\d+/.test(url)) {
+                return url.replace(/([?&](?:t|_t|v)=)\d+/, '$1' + BUILD_TIME);
+            }
+            return url + sep + 't=' + BUILD_TIME;
+        }
+
+        // 3. Monkey-patch document.createElement to ensure any dynamically created <script> or <link> gets a fresh timestamp
+        var originalCreateElement = document.createElement.bind(document);
+        document.createElement = function(tagName, options) {
+            var el = originalCreateElement(tagName, options);
+            var tag = tagName ? tagName.toLowerCase() : '';
+            if (tag === 'script') {
+                var origSetAttrScript = el.setAttribute.bind(el);
+                el.setAttribute = function(name, value) {
+                    if (name && name.toLowerCase() === 'src' && value) {
+                        value = appendTimestamp(value);
+                    }
+                    return origSetAttrScript(name, value);
+                };
+                Object.defineProperty(el, 'src', {
+                    set: function(val) { el.setAttribute('src', val); },
+                    get: function() { return el.getAttribute('src') || ''; },
+                    configurable: true
+                });
+            } else if (tag === 'link') {
+                var origSetAttrLink = el.setAttribute.bind(el);
+                el.setAttribute = function(name, value) {
+                    if (name && name.toLowerCase() === 'href' && value && (el.rel === 'stylesheet' || !el.rel)) {
+                        value = appendTimestamp(value);
+                    }
+                    return origSetAttrLink(name, value);
+                };
+                Object.defineProperty(el, 'href', {
+                    set: function(val) { el.setAttribute('href', val); },
+                    get: function() { return el.getAttribute('href') || ''; },
+                    configurable: true
+                });
+            }
+            return el;
+        };
+
+        // 4. Global Hard-Purge Cache & Reload Function
+        window.CaptalvoBustCacheAndReload = async function(silent) {
+            if (!silent) {
+                console.log('[Captalvo] Purgando caches, service workers, sessões e cookies...');
+            }
+            try {
+                if ('caches' in window) {
+                    var keys = await caches.keys();
+                    await Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                }
+            } catch (e) {}
+
+            try {
+                if ('serviceWorker' in navigator) {
+                    var regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(function(r) { return r.unregister(); }));
+                }
+            } catch (e) {}
+
+            try {
+                sessionStorage.clear();
+                // Clear temporary localStorage items except persistent game saves
+                var toRemove = [];
+                for (var i = 0; i < localStorage.length; i++) {
+                    var k = localStorage.key(i);
+                    if (k && !k.startsWith('captalvo_persistent_')) {
+                        toRemove.push(k);
+                    }
+                }
+                toRemove.forEach(function(k) { localStorage.removeItem(k); });
+            } catch (e) {}
+
+            try {
+                var cookies = document.cookie.split(';');
+                for (var j = 0; j < cookies.length; j++) {
+                    var c = cookies[j];
+                    var eq = c.indexOf('=');
+                    var name = eq > -1 ? c.substring(0, eq).trim() : c.trim();
+                    if (name) {
+                        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + window.location.hostname;
+                        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+                    }
+                }
+            } catch (e) {}
+
+            // Unload completely and redirect with cache busting query param
+            var cleanUrl = window.location.origin + window.location.pathname + '?_nocache=' + Date.now();
+            window.location.replace(cleanUrl);
+        };
+
+    })();
+    </script>
+
+    <link rel="stylesheet" href="captalvo.css?t=1793750340">
 </head>
 <body>
 
@@ -203,11 +325,19 @@
                     </label>
                 </div>
 
+                <h4>Cache do Navegador &amp; Atualizações</h4>
+                <p style="font-size:12px;">
+                    Durante a fase de desenvolvimento, você pode forçar a invalidação completa de cache, cookies e Service Workers para baixar imediatamente a versão mais recente dos scripts.
+                </p>
+                <button id="btn-force-cache-bust" class="btn-secondary" style="border-color:var(--accent-gold); color:var(--accent-gold); margin-bottom:14px; width:100%;" type="button">
+                    🧹 Limpar Cache do Navegador &amp; Recarregar
+                </button>
+
                 <h4>Armazenamento Local</h4>
                 <p style="font-size:12px;">
                     Os arquivos do jogo e configurações ficam salvos no cache seguro do navegador (OPFS).
                 </p>
-                <button id="btn-wipe-storage" class="btn-secondary" style="border-color:var(--accent-red); color:var(--accent-red);" type="button">
+                <button id="btn-wipe-storage" class="btn-secondary" style="border-color:var(--accent-red); color:var(--accent-red); width:100%;" type="button">
                     Limpar Todos os Dados e Arquivos Locais
                 </button>
             </div>
@@ -319,9 +449,12 @@
                     <div class="diag-row"><span class="diag-key">Versão PHP:</span><span id="diag-php-version" class="diag-val">PHP 8.3</span></div>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; gap:10px;">
+                <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                     <button id="btn-run-diag" class="btn-primary" style="font-size:12px; padding:10px 16px;" type="button">
                         🔄 Atualizar Diagnóstico
+                    </button>
+                    <button id="btn-diag-cache-bust" class="btn-secondary" style="font-size:12px; padding:10px 16px; border-color:var(--accent-gold); color:var(--accent-gold);" type="button">
+                        ⚡ Purgar Cache &amp; Recarregar
                     </button>
                     <button id="btn-copy-diag-report" class="btn-secondary" style="font-size:12px; padding:10px 16px;" type="button">
                         📋 Copiar Relatório Completo
@@ -331,7 +464,8 @@
         </div>
     </div>
 
-    <!-- Captalvo Application Script -->
-    <script src="captalvo-app.js?v=0.1.0"></script>
+    <!-- Captalvo Application Script (Stamping handled by deploy & inline guardian) -->
+    <script src="captalvo-app.js?t=1793750340"></script>
 </body>
 </html>
+

@@ -40,8 +40,19 @@ Write-Host "==> [3/6] Preparando área temporária não pública em ~/staging_ca
 $stageCmd = "rm -rf /home/$HostUser/staging_captalvo && mkdir -p /home/$HostUser/staging_captalvo/public /home/$HostUser/staging_captalvo/app && mkdir -p '$RemoteDomainPath/app' '$RemoteDomainPath/public_html'"
 ssh -p $HostPort "${HostUser}@${HostIp}" "$stageCmd"
 
-# 4. Pack & Upload Tar.gz Archives to Staging
-Write-Host "==> [4/6] Compactando e enviando arquivos de produção para staging..."
+# 4. Inject Dynamic Build Timestamp for Anti-Cache & Pack Archives
+$BuildTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+Write-Host "==> [4/6] Injetando timestamp anti-cache ($BuildTimestamp) e compactando arquivos..."
+
+$indexHtmlPath = Join-Path $PublicDir "index.html"
+if (Test-Path $indexHtmlPath) {
+    $indexHtmlContent = Get-Content -Raw -Path $indexHtmlPath -Encoding UTF8
+    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'href="captalvo\.css\?[^"]*"', "href=`"captalvo.css?t=$BuildTimestamp`"")
+    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'src="captalvo-app\.js\?[^"]*"', "src=`"captalvo-app.js?t=$BuildTimestamp`"")
+    Set-Content -Path $indexHtmlPath -Value $indexHtmlContent -Encoding UTF8
+    Write-Host "    index.html atualizado com timestamp t=$BuildTimestamp" -ForegroundColor Green
+}
+
 $tempTarApp = Join-Path $ProjectRoot "captalvo_app.tar.gz"
 $tempTarPublic = Join-Path $ProjectRoot "captalvo_public.tar.gz"
 
@@ -70,11 +81,15 @@ $applyRes = ssh -p $HostPort "${HostUser}@${HostIp}" "$applyCmd"
 Write-Host "    $applyRes" -ForegroundColor Green
 
 # 6. Verify Deployment Live
-Write-Host "==> [6/6] Validando produção live (HTTPS & Health Endpoint)..."
+Write-Host "==> [6/6] Validando produção live (HTTPS, Anti-Cache & Health Endpoint)..."
 $healthCheck = curl.exe -s https://captalvo.online/api/health
 Write-Host "    Resposta /api/health: $healthCheck" -ForegroundColor Cyan
 
 $httpStatus = (curl.exe -s -o /dev/null -w "%{http_code}" https://captalvo.online)
 Write-Host "    Status HTTP captalvo.online: $httpStatus" -ForegroundColor Green
+
+$headers = curl.exe -ILs https://captalvo.online
+$cacheHeader = ($headers | Select-String -Pattern "cache-control" -CaseSensitive:$false)
+Write-Host "    Header Cache-Control: $cacheHeader" -ForegroundColor Yellow
 
 Write-Host "==> [Deploy Concluído] Captalvo Alpha está no ar em https://captalvo.online!" -ForegroundColor Green

@@ -55,19 +55,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // -----------------------------------------------------------------------------
-// Service Worker Registration
+// Service Worker Registration (Anti-Cache / Zero-Cache Mode)
 // -----------------------------------------------------------------------------
 function initServiceWorker() {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('captalvo-sw.js')
+        navigator.serviceWorker.register('captalvo-sw.js?t=' + Date.now(), { updateViaCache: 'none' })
             .then((reg) => {
-                console.log('[Captalvo] Service Worker ativo:', reg.scope);
+                reg.update();
+                console.log('[Captalvo] Service Worker ativo (Zero-Cache Mode):', reg.scope);
             })
             .catch((err) => {
                 console.warn('[Captalvo] Service Worker falhou:', err);
             });
     }
 }
+
+// Global Hard-Refresh Cache Buster Helper
+window.CaptalvoBustCacheAndReload = async function() {
+    console.log('[Captalvo] Limpando todos os caches e forçando recarregamento...');
+    if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+    }
+    try {
+        sessionStorage.clear();
+        document.cookie.split(";").forEach(c => {
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+    } catch (e) {}
+    window.location.href = window.location.pathname + '?_nocache=' + Date.now();
+};
 
 // -----------------------------------------------------------------------------
 // Storage & OPFS Detection
@@ -386,10 +407,10 @@ async function startGame() {
         }
     };
 
-    // Load GeneralsZH.js dynamically
+    // Load GeneralsZH.js dynamically with live anti-cache timestamp
     try {
         const script = document.createElement('script');
-        script.src = 'GeneralsZH.js?v=0.5.2';
+        script.src = 'GeneralsZH.js?t=' + Date.now();
         script.async = true;
         document.body.appendChild(script);
     } catch (e) {
@@ -423,6 +444,14 @@ function setupUIEventListeners() {
     document.getElementById('btn-run-diag').addEventListener('click', async () => {
         await CaptalvoDiagnostics.renderDiagnosticsUI();
     });
+    const btnDiagCacheBust = document.getElementById('btn-diag-cache-bust');
+    if (btnDiagCacheBust) {
+        btnDiagCacheBust.addEventListener('click', () => {
+            if (confirm('Deseja purgar todo o cache, service workers e cookies para carregar a versão mais recente?')) {
+                window.CaptalvoBustCacheAndReload();
+            }
+        });
+    }
     document.getElementById('btn-copy-diag-report').addEventListener('click', async () => {
         await CaptalvoDiagnostics.copyReportToClipboard();
     });
@@ -483,6 +512,16 @@ function setupUIEventListeners() {
     document.getElementById('setting-edge-scroll').addEventListener('change', (e) => {
         localStorage.setItem('captalvo_edge_scroll', e.target.checked ? '1' : '0');
     });
+
+    // Cache purge & force reload
+    const btnForceCacheBust = document.getElementById('btn-force-cache-bust');
+    if (btnForceCacheBust) {
+        btnForceCacheBust.addEventListener('click', () => {
+            if (confirm('Deseja limpar todo o cache e recarregar a versão mais recente do Captalvo?')) {
+                window.CaptalvoBustCacheAndReload();
+            }
+        });
+    }
 
     // Wipe storage
     document.getElementById('btn-wipe-storage').addEventListener('click', async () => {

@@ -1,5 +1,6 @@
 # ==============================================================================
 # Captalvo Apache Configuration
+# AGGRESSIVE NO-CACHE FOR RAPID DEVELOPMENT & ITERATION
 # ==============================================================================
 
 # MIME Types
@@ -11,14 +12,28 @@
     AddType image/svg+xml .svg
 </IfModule>
 
-# Security & Cross-Origin Isolation (Required for SharedArrayBuffer & OPFS)
+# Absolute Anti-Cache Headers (Server, CDN and Browser)
 <IfModule mod_headers.c>
-    Header set Cross-Origin-Opener-Policy "same-origin"
-    Header set Cross-Origin-Embedder-Policy "require-corp"
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-Frame-Options "SAMEORIGIN"
-    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    # Security & Cross-Origin Isolation
+    Header always set Cross-Origin-Opener-Policy "same-origin"
+    Header always set Cross-Origin-Embedder-Policy "require-corp"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Total Cache Annihilation (Browser, Proxies & Hostinger CDN)
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+    Header always set X-Accel-Expires "0"
+
+    # Disable ETags
+    Header unset ETag
+    Header always unset ETag
 </IfModule>
+
+# Disable File ETag generation
+FileETag None
 
 # Compression
 <IfModule mod_deflate.c>
