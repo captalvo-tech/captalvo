@@ -94,7 +94,10 @@ Write-Host "    Header Cache-Control: $cacheHeader" -ForegroundColor Yellow
 $bigArmadaStatus = (curl.exe -s -o /dev/null -w "%{http_code}" https://captalvo.online/big-armada/)
 Write-Host "    Status HTTP captalvo.online/big-armada/: $bigArmadaStatus" -ForegroundColor Green
 
-$bigArmadaApi = curl.exe -s "https://captalvo.online/api/big-armada.php?action=state"
-Write-Host "    Resposta /api/big-armada.php (resumo): $($bigArmadaApi.Substring(0, [Math]::Min(120, $bigArmadaApi.Length)))..." -ForegroundColor Cyan
+$bigArmadaApi = (curl.exe -s "https://captalvo.online/api/big-armada.php?action=state" | Out-String).Trim()
+if ($bigArmadaApi.Length -gt 0) {
+    $preview = $bigArmadaApi.Substring(0, [Math]::Min(120, $bigArmadaApi.Length))
+    Write-Host "    Resposta /api/big-armada.php: $preview..." -ForegroundColor Cyan
+}
 
 Write-Host "==> [Deploy Concluído] Captalvo Alpha está no ar em https://captalvo.online!" -ForegroundColor Green
