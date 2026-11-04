@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" class="dark" data-brand="generals">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Captalvo Zero Hour — Motor WebGPU (Origami GeneralsX)</title>
+    <meta name="description" content="GeneralsX, the open-source engine reimplementation, compiled to WebAssembly with WebGPU rendering and LAN multiplayer — streaming from your own installed copy. Part of the wasm.ltd game preservation initiative.">
+    <link rel="license" href="/llms.txt">
+    <link rel="canonical" href="https://generals.wasm.ltd/">
+    <meta name="theme-color" content="#020b12">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="wasm.ltd">
+    <meta property="og:title" content="GeneralsX in your browser">
+    <meta property="og:description" content="The full game compiled to WebAssembly + WebGPU, with LAN multiplayer. Bring your own installed copy — nothing is downloaded or redistributed.">
+    <meta property="og:url" content="https://generals.wasm.ltd/">
+    <meta property="og:image" content="https://generals.wasm.ltd/og-generals.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="GeneralsX in your browser">
+    <meta name="twitter:description" content="Full game, WebAssembly + WebGPU, LAN multiplayer. Your own copy, streamed — nothing redistributed.">
+    <meta name="twitter:image" content="https://generals.wasm.ltd/og-generals.png">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23020b12'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='18' font-weight='bold' fill='%2300d9ff' text-anchor='middle'%3EGX%3C/text%3E%3C/svg%3E">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "GeneralsX — wasm.ltd",
+      "url": "https://generals.wasm.ltd/",
+      "image": "https://generals.wasm.ltd/og-generals.png",
+      "description": "GeneralsX compiled to WebAssembly, rendering through WebGPU, with browser-to-browser LAN multiplayer. Players stream assets from their own installed copy; no game data is distributed.",
+      "playMode": ["SinglePlayer", "MultiPlayer"],
+      "applicationCategory": "Game",
+      "operatingSystem": "Web browser (WebGPU: Chrome, Edge)",
+      "gamePlatform": "Web browser",
+      "genre": "Real-time strategy",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://github.com/origami-ltd/wasm-generals/blob/main/LICENSE.md",
+      "usageInfo": "https://generals.wasm.ltd/llms.txt",
+      "creditText": "A project by Origami 限 · part of wasm.ltd · WebAssembly port by Erasmo \"ebellumat\" Bellumat",
+      "isBasedOn": "https://github.com/fbraz3/GeneralsX",
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "author": { "@type": "Person", "name": "Erasmo Bellumat", "url": "https://github.com/ebellumat" },
+      "publisher": { "@type": "Organization", "name": "Origami 限", "url": "https://origami.ltd" },
+      "isPartOf": { "@type": "WebSite", "name": "wasm.ltd", "url": "https://wasm.ltd" }
+    }
+    </script>
+    <!-- Google Analytics removed for user privacy (Captalvo LGPD Compliance) -->
+<script type="module" crossorigin src="/webgpu/assets/index-BcW0hOmG.js?t=1793802821"></script>
+<link rel="stylesheet" crossorigin href="/webgpu/assets/index-DaJE1AVD.css?t=1793802821">
+
+<body class="ogx-body ogx-scanlines">
+<div style="position:fixed; top:10px; left:10px; z-index:999999; display:flex; align-items:center; gap:8px;">
+    <a href="/" style="display:inline-flex; align-items:center; gap:6px; background:rgba(2,11,18,0.92); color:#00d9ff; border:1px solid rgba(0,217,255,0.45); border-radius:4px; padding:6px 12px; font-family:ui-monospace, monospace; font-size:12px; font-weight:700; text-decoration:none; backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,0.6); transition:all 0.2s;" onmouseover="this.style.borderColor='#00d9ff';this.style.background='rgba(2,11,18,1)'" onmouseout="this.style.borderColor='rgba(0,217,255,0.45)';this.style.background='rgba(2,11,18,0.92)'">
+        ◀ SELEÇÃO DE MOTOR (CAPTALVO)
+    </a>
+    <span style="background:rgba(0,217,255,0.12); color:#00d9ff; border:1px solid rgba(0,217,255,0.25); border-radius:4px; padding:6px 10px; font-family:ui-monospace, monospace; font-size:11px; backdrop-filter:blur(6px);">
+        WEBGPU MOTOR &bull; ORIGAMI 46382a3
+    </span>
+</div>
+
+    <div id="app"></div>
+</body>
+</html>

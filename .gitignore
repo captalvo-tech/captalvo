@@ -7,8 +7,10 @@
 *.BIK
 *.data
 *.DATA
+!public/webgpu/GeneralsXZH.data
 assets/
 public/assets/
+!public/webgpu/assets/
 *.map
 *.MAP
 *.mp4

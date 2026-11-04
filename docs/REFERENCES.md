@@ -28,3 +28,30 @@ Documentação permanente dos projetos de referência no ecossistema de código 
   2. **Multiplayer Serverless P2P:** Conexão direta entre navegadores via WebRTC DataChannels com sinalização gratuita por brokers MQTT públicos (`broker.emqx.io`).
   3. **Blindagem de Teclas (`KeyGuard`):** Prevenção de conflito de atalhos de RTS (`Ctrl+1..9`, `Backspace`, `Tab`, `F1-F12`) com o navegador.
   4. **Ciclo de Vida:** Teardown limpo via recarga de página para desalocar a memória do motor SAGE.
+
+
+---
+
+## 3. Arquitetura Dual no Captalvo (WebGL 2.0 + WebGPU)
+
+A partir da versão **0.2.0-Alpha**, o Captalvo opera com arquitetura dupla desacoplada sob o mesmo domínio (`https://captalvo.online`), com inicialização e armazenamento isolados:
+
+| Rota | Motor | Tecnologia | Heap WASM | Armazenamento | Propósito |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `https://captalvo.online/` | **Launcher Captalvo** | HTML5 / CSS3 / Hardware Probe | N/A | LocalStorage (preferências) | Seletor de motor, verificação de compatibilidade WebGPU e memória |
+| `https://captalvo.online/webgl2/` | **Motor Atual** | WebGL 2.0 + Emscripten + SDL2 | Dinâmico (~384 MB - 1.2 GB) | OPFS (`navigator.storage.getDirectory()`) | Menu original interativo, Afterburner HUD, console e telemetria |
+| `https://captalvo.online/webgpu/` | **Motor Origami** | WebGPU + DXVK Shaders + Pthread Worker | 2 GiB fixo | IndexedDB (`FolderStore("generalsx")`) | Nova engine experimental multi-thread com streaming local sob demanda |
+
+### 4. Rastreabilidade e Licenciamento Origami
+
+- **Repositório Upstream:** `https://github.com/origami-ltd/wasm-generals`
+- **Commit Upstream Fixado:** `46382a383da270e16a60a28ecf342b569b998111` ("Name the licence everywhere it was only described")
+- **Licença da Engine:** GNU General Public License v3.0 (GPL-3.0) com termos adicionais da Electronic Arts (EA Community SDK terms) em `public/webgpu/LICENSE-ENGINE-GPL-3.0.md`.
+- **Licença da Interface / Shell:** `LicenseRef-MIT-PoU` (MIT with Proof of Usage) em `public/webgpu/LICENSE-ORIGAMI.md`.
+- **Atribuição Obrigatória:**
+  ```text
+  Includes material from wasm-generals — https://github.com/origami-ltd/wasm-generals
+  ```
+- **Auditoria de Privacidade & LGPD:**
+  - O script externo do Google Analytics (`G-7PS7XPQE5G`) presente no frontend do repositório original foi **completamente removido** da distribuição instalada no Captalvo.
+  - Endpoints auxiliares (`/GeneralsXLog`, `/GeneralsXAssets`, `/GeneralsXShare`) foram redirecionados para a infraestrutura interna do Captalvo (`public/api/index.php`), garantindo que nenhum dado de telemetria ou logs seja enviado para servidores externos.

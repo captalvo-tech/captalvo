@@ -20,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Load Bootstrap
 $bootstrapFile = __DIR__ . '/../../app/Bootstrap.php';
 if (!file_exists($bootstrapFile)) {
-    // Fallback if app is in public_html/app or sibling
     $bootstrapFile = __DIR__ . '/../app/Bootstrap.php';
 }
 
@@ -31,6 +30,35 @@ if (file_exists($bootstrapFile)) {
 
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
 $path = rtrim($uri, '/');
+$endpointParam = $_GET['endpoint'] ?? '';
+
+// Origami WebGPU Helper Endpoints
+if ($endpointParam === 'GeneralsXAssets' || str_ends_with($path, 'GeneralsXAssets')) {
+    echo json_encode([
+        'missing' => true,
+        'entries' => []
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit(0);
+}
+
+if ($endpointParam === 'GeneralsXLog' || str_ends_with($path, 'GeneralsXLog')) {
+    $raw = file_get_contents('php://input');
+    $logDir = dirname(__DIR__, 2) . '/app/storage/logs';
+    if (!is_dir($logDir)) {
+        $logDir = dirname(__DIR__) . '/app/storage/logs';
+    }
+    if (is_dir($logDir) || @mkdir($logDir, 0775, true)) {
+        $entry = sprintf("[%s] [OrigamiEngine] %s\n", gmdate('Y-m-d\TH:i:s\Z'), trim($raw));
+        @file_put_contents($logDir . '/origami.log', $entry, FILE_APPEND | LOCK_EX);
+    }
+    echo json_encode(['status' => 'ok'], JSON_PRETTY_PRINT);
+    exit(0);
+}
+
+if ($endpointParam === 'GeneralsXShare' || str_ends_with($path, 'GeneralsXShare')) {
+    echo json_encode(['url' => ''], JSON_PRETTY_PRINT);
+    exit(0);
+}
 
 if ($path === '/api/health' || $path === '/api/health.php' || str_ends_with($path, 'health')) {
     if (class_exists('Captalvo\\Controllers\\HealthController')) {
@@ -40,9 +68,12 @@ if ($path === '/api/health' || $path === '/api/health.php' || str_ends_with($pat
         echo json_encode([
             'status' => 'ok',
             'service' => 'Captalvo Core API',
-            'version' => '0.1.0-alpha',
+            'version' => '0.2.0-alpha',
             'php_version' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
-            'engine' => 'Command & Conquer: Generals Zero Hour (WASM)',
+            'engines' => [
+                'webgl2' => 'Command & Conquer: Generals Zero Hour (SAGE WASM)',
+                'webgpu' => 'GeneralsX WebGPU (Origami wasm-generals)'
+            ],
             'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
             'uptime' => 'online',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -78,6 +109,8 @@ echo json_encode([
     'status' => 'online',
     'endpoints' => [
         '/api/health' => 'System health status and telemetry',
-        '/api/telemetry' => 'Automated client telemetry & remote log ingestion (POST/GET)'
+        '/api/telemetry' => 'Automated client telemetry & remote log ingestion (POST/GET)',
+        '/webgl2/' => 'Current WebGL 2.0 Engine',
+        '/webgpu/' => 'Origami WebGPU Engine'
     ]
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
