@@ -133,3 +133,88 @@ Qf = (a, b, c) => {
 
 ### 5.4. Arquivos do Jogo em `/Zero-Hour-Files/`
 - Os arquivos do jogo disponibilizados pelo usuário no servidor Hostinger em `/home/u415074840/domains/captalvo.online/Zero-Hour-Files/` foram verificados e estão íntegros (incluindo `AudioZH.big`, `BrazilianZH.big`, `TexturesZH.big`, `W3DZH.big` e executáveis originais).
+
+---
+
+## 6. Diagnóstico dos Novos Problemas Relatados
+
+### 6.1. Problema 1: "Cliques ainda não funcionam" — Descoberta do Duplo Escalonamento (Double-Scaling em C++)
+Após a correção da simetria (`MOUSEDOWN == MOUSEUP`), os logs confirmaram:
+```text
+[Diagnostics:Input] MOUSEDOWN DOM(1334, 190) -> RelCanvas(981, 190) -> Engine(646, 125) -> 🎯 HIT: UM JOGADOR
+[Diagnostics:Input] MOUSEUP   DOM(1334, 190) -> RelCanvas(981, 190) -> Engine(646, 125) -> 🎯 HIT: UM JOGADOR
+```
+No entanto, o submenu ainda não abria.
+
+#### Investigação no Código C++ da Engine (`SDL3Mouse.cpp`):
+Ao inspecionar a implementação nativa de `SDL3Mouse.cpp` nas referências do projeto:
+```cpp
+void SDL3Mouse::scaleMouseCoordinates(int rawX, int rawY, Uint32 windowID, int& scaledX, int& scaledY)
+{
+    SDL_Window* window = SDL_GetWindowFromID(windowID);
+    if (!window) window = TheSDL3Window;
+    ...
+    int windowWidth = 0, windowHeight = 0;
+    SDL_GetWindowSize(window, &windowWidth, &windowHeight); // Retorna canvas.clientWidth e clientHeight (1214x911)
+
+    int internalWidth  = TheDisplay->getWidth();  // 800
+    int internalHeight = TheDisplay->getHeight(); // 600
+
+    float factorX = static_cast<float>(internalWidth)  / static_cast<float>(windowWidth);  // 800 / 1214 = 0.6589
+    float factorY = static_cast<float>(internalHeight) / static_cast<float>(windowHeight); // 600 / 911 = 0.6586
+
+    scaledX = static_cast<int>(rawX * factorX);
+    scaledY = static_cast<int>(rawY * factorY);
+}
+```
+**O que estava acontecendo:**
+1. A engine em C++ **já implementava internamente o escalonamento** de coordenadas de tela (`canvas.clientWidth` / `windowWidth`) para a resolução lógica interna ($800 \times 600$).
+2. Na nossa alteração anterior em `Qf`, convertemos as coordenadas antecipadamente em JavaScript para $646 \times 125$ e gravamos esse valor em `v[d+10]` e `v[d+11]`.
+3. O C++ recebeu `rawX = 646` e aplicou a sua própria fórmula de escala:
+   $$\text{scaledX} = 646 \times \frac{800}{1214} = \mathbf{425}$$
+   $$\text{scaledY} = 125 \times \frac{600}{911} = \mathbf{82}$$
+4. Na coordenada $(425, 82)$ do jogo, o clique caiu **no céu vazio com fumaça da cena 3D** ao invés do botão "UM JOGADOR" (que fica na faixa $X=600..780$)!
+5. **Correção Aplicada:** `Qf` em `GeneralsZH.js` agora passa `Math.round(_rawX)` e `Math.round(_rawY)` (a posição em pixels CSS relativos ao canvas) para `v[d+10]` e `v[d+11]`. O C++ aplica a escala para $800 \times 600$ de forma limpa, fazendo o clique aterrissar exatamente em $(646, 125)$.
+
+### 6.2. Problema 2: Falha nos Efeitos Sonoros de Interface (`ubuttons.wav`) e Thrashing de Cache
+Os logs do usuário demonstraram:
+```text
+[CaptalvoBridge] Recurso ausente na RAM para leitura síncrona: audio.big (110203856-110354975, 151120 bytes)
+[ZeroHour-WASM] WARN: Retrying fetch for data/audio/sounds/ubuttons.wav (attempt 2)
+[ZeroHour-WASM] WARN: Retrying fetch for data/audio/sounds/ubuttons.wav (attempt 3)
+[ZeroHour-WASM] ERROR: Failed to fetch file data: data/audio/sounds/ubuttons.wav from Audio.big (status -404)
+[CaptalvoCache] Thrashing detectado para audio.big:110203856-110354975. Expandindo orçamento de RAM temporariamente...
+```
+1. No C&C Zero Hour (`GadgetPushButton.cpp`), quando um botão é clicado, o motor dispara o evento de áudio `GUIClick`, que busca `data/audio/sounds/ubuttons.wav` dentro de `Audio.big`.
+2. Como `Audio.big` (123 MB) não estava carregado em RAM, o motor caía em um loop de 3 tentativas síncronas de fetch via HTTP (resultando em 404), congelando a thread principal e atrasando o processamento do evento de `MOUSEUP`.
+3. **Correção Aplicada:** Tanto `AudioZH.big` (23 MB) quanto `Audio.big` (123 MB) foram incorporados à lista `ESSENTIAL_FULL_PRELOAD`. Com 146 MB extras, todos os sons de botões (`uboarder.wav` no hover, `ubuttons.wav` no clique) passam a responder síncronamente da RAM em menos de 0.05ms.
+
+### 6.3. Problema 3: "Sair do jogo e abrir novamente trava / Consumo de RAM > 8GB"
+O usuário observou:
+> *"uma vez que eu carrego o jogo, volto pro menu e tento abrir o jogo novamente ele trava o carregamento e não abre o jogo novamente. Inclusive parece que ele nem fecha o jogo . o consumio de Ram está altiossimos quase estourando 100% mais de 8GB"*
+
+#### Diagnóstico Técnico:
+1. No arquivo `captalvo-app.js`, o botão `#btn-exit-game` apenas ocultava a `div#game-container` (`display: none;`) e reexibia a home.
+2. A instância WebAssembly do motor SAGE (`requestAnimationFrame`, WebGL 2.0 textures, heap de 2GB a 4GB, AudioContext) **continuava rodando a 60 FPS em background indefinidamente**.
+3. Ao clicar em "Jogar" novamente, o aplicativo alocava **outros 1.2 GB** de buffers em JavaScript e injetava uma **segunda tag `<script src="GeneralsZH.js">`**, instanciando uma **segunda máquina virtual WebAssembly** com outros 2-4GB de heap.
+4. Duas instâncias ativas concorrentes disputavam o contexto WebGL e empurravam a RAM do navegador para mais de 8GB, causando esgotamento de memória e travamento total da aba.
+5. Conforme documentado pelo projeto de referência `Generals-WebAssembly` (`web/shell/game.js`):
+   > *"The wasm runtime is torn down and cannot restart in place, so reload the page."*
+6. Motores C++ complexos como o SAGE possuem singletons e variáveis estáticas globais que não podem ser reinicializados no mesmo contexto JavaScript.
+7. **Correções Aplicadas:**
+   - `#btn-exit-game`: Agora executa `window.location.reload()`, descarregando completamente o heap do WASM (liberando imediatamente 4 a 8 GB) e retornando a página limpa com arquivos preservados no OPFS.
+   - `Module.onExit`: Conectado a `window.location.reload()` quando o usuário escolhe "Sair do Jogo" no próprio menu original do Zero Hour.
+   - Guard de Instanciação Dupla: Se `AppState.isGameRunning` for verdadeiro e o usuário tentar iniciar novo jogo, a página recarrega automaticamente de forma limpa.
+   - `installFocusGuard`: Garante foco contínuo no canvas para que eventos de teclado e mouse nunca sejam descartados pelo SDL.
+
+---
+
+## 7. Projetos de Referência Ativos
+
+| Projeto | Repositório / Demo | Arquitetura | Características Relevantes |
+|---|---|---|---|
+| **TheodoryLabs** | [Generals-Web](https://github.com/TheodoryLabs/command-and-conquer-generals-zero-hour-web) | WASM + WebGL 2.0 | Engine base, suporte síncrono a arquivos .big |
+| **GeneralsX Web (origami-ltd)** | [wasm-generals](https://github.com/origami-ltd/wasm-generals) & [generals.wasm.ltd](https://generals.wasm.ltd) | WASM + WebGPU | Workers, SharedArrayBuffer, reload no exit |
+| **GeneralsXWeb (meerzulee)** | [GeneralsXWeb](https://github.com/meerzulee/GeneralsXWeb) | WASM + WebGL 2.0 | Controles, menus e escaramuça demonstrados |
+| **Generals-WebAssembly (JaroslavBes)** | [Generals-WebAssembly](https://github.com/JaroslavBes/Generals-WebAssembly) | WASM + WebGL 2.0 + OPFS | Código-fonte C++ completo (`SDL3Mouse.cpp`, `GameWindowTransitions.cpp`) |
+

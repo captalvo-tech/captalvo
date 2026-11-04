@@ -1020,6 +1020,11 @@ function dismissAllModals() {
 // Engine Launch Coordinator with Fullscreen Cinematic Intro & Real Loading HUD
 // -----------------------------------------------------------------------------
 async function startGame() {
+    if (AppState.isGameRunning) {
+        console.warn("[Captalvo] Sessão de jogo anterior ativa. Recarregando página para reiniciar com memória limpa...");
+        window.location.reload();
+        return;
+    }
     if (!AppState.isGameReady) {
         openModal('modal-import');
         return;
@@ -1075,7 +1080,25 @@ async function launchWithCinematicIntro() {
         return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
 
-    function doActualGameStart() {
+    
+function installFocusGuard() {
+    if (window._captalvoFocusGuardInstalled) return;
+    window._captalvoFocusGuardInstalled = true;
+    const refocus = () => {
+        const cv = document.getElementById("canvas");
+        if (!cv || !AppState.isGameRunning) return;
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || (ae.closest && ae.closest(".modal-overlay")))) return;
+        try { cv.focus({ preventScroll: true }); } catch (e) {}
+    };
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) setTimeout(refocus, 50);
+    });
+    window.addEventListener("focus", () => setTimeout(refocus, 50));
+    window.addEventListener("pointerdown", refocus, { capture: true });
+}
+
+function doActualGameStart() {
         if (gameLaunched) return;
         gameLaunched = true;
 
@@ -1099,6 +1122,7 @@ async function launchWithCinematicIntro() {
         if (canvas) {
             enforceCanvasResolution();
             canvas.focus({ preventScroll: true });
+            installFocusGuard();
         }
 
         AppState.isGameRunning = true;
@@ -1282,6 +1306,10 @@ async function launchWithCinematicIntro() {
             if (TelemetryManager) TelemetryManager.log('fatal', 'wasm_abort', String(err));
             alert('O motor de jogo foi abortado: ' + err);
             if (overlay) overlay.style.display = 'none';
+        },
+        onExit: (code) => {
+            console.log('[Captalvo] Motor de jogo finalizado com código:', code);
+            window.location.reload();
         }
     };
 
@@ -1768,14 +1796,10 @@ function setupUIEventListeners() {
 
     // Exit Game button
     document.getElementById('btn-exit-game').addEventListener('click', () => {
-        const homeMain = document.getElementById('home-main');
-        if (homeMain) homeMain.style.display = 'flex';
-        const gameContainer = document.getElementById('game-container');
-        if (gameContainer) gameContainer.style.display = 'none';
-        const gameEscapeBar = document.getElementById('game-escape-bar');
-        if (gameEscapeBar) gameEscapeBar.style.display = 'none';
-        if (window.CaptalvoHomeSim) window.CaptalvoHomeSim.resume();
-        AppState.isGameRunning = false;
+        console.log('[Captalvo] Encerrando sessão do jogo e liberando memória WASM...');
+        // Zero Hour WASM cannot be restarted in-place in the same JS context without leaking 2-4GB of memory.
+        // Clean reload immediately frees all WASM memory, WebGL textures and audio contexts.
+        window.location.reload();
     });
 
     // Settings save

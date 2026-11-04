@@ -80,13 +80,13 @@ class CaptalvoAdaptiveCache {
         }
 
         if (ramGB >= 16) {
-            this.maxMemoryBytes = 1200 * 1024 * 1024; // 1.2 GB on 16GB+ systems
+            this.maxMemoryBytes = 1600 * 1024 * 1024; // 1.6 GB on 16GB+ systems (accommodates Audio + Textures + W3D)
         } else if (ramGB >= 8) {
-            this.maxMemoryBytes = 768 * 1024 * 1024;  // 768 MB on 8GB systems
+            this.maxMemoryBytes = 1024 * 1024 * 1024; // 1.0 GB on 8GB systems
         } else if (ramGB >= 4) {
-            this.maxMemoryBytes = 384 * 1024 * 1024;  // 384 MB on 4GB systems
+            this.maxMemoryBytes = 512 * 1024 * 1024;  // 512 MB on 4GB systems
         } else {
-            this.maxMemoryBytes = 160 * 1024 * 1024;  // 160 MB on low-RAM systems
+            this.maxMemoryBytes = 256 * 1024 * 1024;  // 256 MB on low-RAM systems
         }
     }
 

@@ -49,7 +49,9 @@ class CaptalvoAssetBridge {
             'brazilianzh.big', 'englishzh.big',
             'brazilian.big', 'english.big',
             'terrainzh.big', 'terrain.big',
-            'mapszh.big'
+            'mapszh.big',
+            'audiozh.big', 'audio.big',
+            'audiobrazilianzh.big', 'audiobrazilian.big'
         ];
     }
 
