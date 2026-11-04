@@ -6,673 +6,1068 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#070a09">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="Captalvo — Simulador de Guerra Global Virtual. Selecione o motor de execução para Command & Conquer: Generals Zero Hour (WebGL 2.0 ou WebGPU Origami).">
-    <title>Captalvo — Seleção de Motor (WebGL 2.0 / WebGPU)</title>
+    <meta name="description" content="Captalvo — Conquista sem limites. Simulador de Guerra Global Virtual. Baseado no motor Command & Conquer Generals Zero Hour via WebAssembly.">
+    <title>Captalvo — Conquista sem limites</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Anti-Cache Directives -->
+    <!-- Anti-Cache Directives (Meta Tags) -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
 
-    <style>
-        :root {
-            --bg-base: #070a09;
-            --bg-card: rgba(14, 20, 17, 0.88);
-            --bg-card-hover: rgba(20, 30, 25, 0.95);
-            --border-dim: rgba(98, 120, 107, 0.28);
-            --border-bright: rgba(46, 204, 113, 0.5);
-            --text-main: #f0f4f2;
-            --text-muted: #8b9d94;
-            --accent-green: #2ecc71;
-            --accent-gold: #ffd700;
-            --accent-cyan: #00d9ff;
-            --accent-red: #e74c3c;
-            --font-main: 'DM Sans', sans-serif;
-            --font-display: 'Space Grotesk', sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
-        }
+    <!-- Early Anti-Cache & Timestamp Guardian Script -->
+    <script>
+    (function() {
+        var BUILD_TIME = Date.now();
+        window.__CAPTALVO_BUILD_TIME__ = BUILD_TIME;
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            font-family: var(--font-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            overflow-x: hidden;
-            position: relative;
-        }
-
-        /* Tactical Background Grid & Glow */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image: 
-                linear-gradient(rgba(46, 204, 113, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(46, 204, 113, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        body::after {
-            content: '';
-            position: fixed;
-            top: -20%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 800px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(0, 217, 255, 0.08) 0%, rgba(46, 204, 113, 0.04) 40%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1180px;
-            padding: 40px 24px;
-            z-index: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 32px;
-        }
-
-        /* Header */
-        header {
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .brand-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            background: rgba(46, 204, 113, 0.1);
-            border: 1px solid rgba(46, 204, 113, 0.3);
-            border-radius: 999px;
-            font-family: var(--font-mono);
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--accent-green);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .pulse-dot {
-            width: 7px;
-            height: 7px;
-            background: var(--accent-green);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--accent-green);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.85); }
-        }
-
-        h1.main-title {
-            font-family: var(--font-display);
-            font-size: clamp(2rem, 4vw, 3.2rem);
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            text-transform: uppercase;
-            background: linear-gradient(135deg, #ffffff 40%, #8b9d94 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        p.subtitle {
-            font-size: 1.05rem;
-            color: var(--text-muted);
-            max-width: 680px;
-            line-height: 1.5;
-        }
-
-        /* Diagnostic Bar */
-        .hardware-probe-bar {
-            background: rgba(14, 20, 17, 0.7);
-            border: 1px solid var(--border-dim);
-            border-radius: 12px;
-            padding: 14px 20px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            font-size: 12px;
-            font-family: var(--font-mono);
-            backdrop-filter: blur(8px);
-        }
-
-        .probe-items {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .probe-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .probe-label {
-            color: var(--text-muted);
-        }
-
-        .probe-value {
-            font-weight: 600;
-            color: var(--text-main);
-        }
-
-        .badge-status {
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .badge-ready {
-            background: rgba(46, 204, 113, 0.15);
-            color: var(--accent-green);
-            border: 1px solid rgba(46, 204, 113, 0.4);
-        }
-
-        .badge-warn {
-            background: rgba(255, 215, 0, 0.15);
-            color: var(--accent-gold);
-            border: 1px solid rgba(255, 215, 0, 0.4);
-        }
-
-        .badge-alert {
-            background: rgba(231, 76, 60, 0.15);
-            color: var(--accent-red);
-            border: 1px solid rgba(231, 76, 60, 0.4);
-        }
-
-        /* Dual Engines Grid */
-        .engine-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-            gap: 28px;
-        }
-
-        .engine-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-dim);
-            border-radius: 16px;
-            padding: 28px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 24px;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
-            backdrop-filter: blur(12px);
-        }
-
-        .engine-card:hover {
-            transform: translateY(-4px);
-            background: var(--bg-card-hover);
-        }
-
-        .engine-card.card-webgl {
-            border-top: 3px solid var(--accent-green);
-        }
-
-        .engine-card.card-webgl:hover {
-            border-color: rgba(46, 204, 113, 0.6);
-            box-shadow: 0 12px 32px rgba(46, 204, 113, 0.1);
-        }
-
-        .engine-card.card-webgpu {
-            border-top: 3px solid var(--accent-cyan);
-        }
-
-        .engine-card.card-webgpu:hover {
-            border-color: rgba(0, 217, 255, 0.6);
-            box-shadow: 0 12px 32px rgba(0, 217, 255, 0.12);
-        }
-
-        .card-top {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .card-header-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .engine-tag {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            padding: 4px 10px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-
-        .tag-webgl {
-            background: rgba(46, 204, 113, 0.12);
-            color: var(--accent-green);
-            border: 1px solid rgba(46, 204, 113, 0.3);
-        }
-
-        .tag-webgpu {
-            background: rgba(0, 217, 255, 0.12);
-            color: var(--accent-cyan);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-        }
-
-        .engine-title {
-            font-family: var(--font-display);
-            font-size: 1.55rem;
-            font-weight: 700;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .engine-desc {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-            line-height: 1.55;
-        }
-
-        .feature-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            font-size: 0.88rem;
-        }
-
-        .feature-list li {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            color: #cfdad5;
-            line-height: 1.4;
-        }
-
-        .feature-icon {
-            font-size: 14px;
-            flex-shrink: 0;
-            margin-top: 1px;
-        }
-
-        .notice-box {
-            padding: 12px 14px;
-            border-radius: 8px;
-            font-size: 0.84rem;
-            line-height: 1.45;
-        }
-
-        .notice-webgl {
-            background: rgba(255, 215, 0, 0.08);
-            border-left: 3px solid var(--accent-gold);
-            color: #f7e082;
-        }
-
-        .notice-webgpu {
-            background: rgba(0, 217, 255, 0.08);
-            border-left: 3px solid var(--accent-cyan);
-            color: #a4edfc;
-        }
-
-        .btn-launch {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            width: 100%;
-            padding: 16px 24px;
-            border-radius: 8px;
-            font-family: var(--font-display);
-            font-size: 1.05rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            border: none;
-        }
-
-        .btn-webgl {
-            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-            color: #070a09;
-            box-shadow: 0 4px 18px rgba(46, 204, 113, 0.3);
-        }
-
-        .btn-webgl:hover {
-            background: linear-gradient(135deg, #38e280 0%, #2ecc71 100%);
-            box-shadow: 0 6px 24px rgba(46, 204, 113, 0.45);
-        }
-
-        .btn-webgpu {
-            background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
-            color: #020b12;
-            box-shadow: 0 4px 18px rgba(0, 217, 255, 0.3);
-        }
-
-        .btn-webgpu:hover:not(:disabled) {
-            background: linear-gradient(135deg, #33e1ff 0%, #00b3ee 100%);
-            box-shadow: 0 6px 24px rgba(0, 217, 255, 0.45);
-        }
-
-        .btn-webgpu:disabled {
-            background: #2a3b34;
-            color: #63756c;
-            cursor: not-allowed;
-            box-shadow: none;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* Footer */
-        footer {
-            width: 100%;
-            max-width: 1180px;
-            padding: 24px;
-            z-index: 1;
-            border-top: 1px solid var(--border-dim);
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            font-size: 0.82rem;
-            color: var(--text-muted);
-        }
-
-        footer a {
-            color: var(--text-main);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        footer a:hover {
-            color: var(--accent-green);
-        }
-
-        .footer-links {
-            display: flex;
-            gap: 16px;
-        }
-
-        @media (max-width: 768px) {
-            .hardware-probe-bar {
-                flex-direction: column;
-                align-items: flex-start;
+        // 1. Bfcache Killer: Force reload if restored from browser memory cache
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                console.warn('[Captalvo] Detectada restauração de cache (bfcache). Forçando reload...');
+                window.location.reload();
             }
-            .engine-grid {
-                grid-template-columns: 1fr;
+        });
+
+        // 2. Dynamic timestamp helper
+        function appendTimestamp(url) {
+            if (!url || typeof url !== 'string') return url;
+            if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                if (!url.includes(window.location.host)) return url;
             }
+            var sep = url.indexOf('?') === -1 ? '?' : '&';
+            if (/[?&](t|_t|v)=\d+/.test(url)) {
+                return url.replace(/([?&](?:t|_t|v)=)\d+/, '$1' + BUILD_TIME);
+            }
+            return url + sep + 't=' + BUILD_TIME;
         }
-    </style>
+
+        // 3. Monkey-patch document.createElement to ensure dynamically added scripts/links have timestamps
+        var originalCreateElement = document.createElement.bind(document);
+        document.createElement = function(tagName, options) {
+            var el = originalCreateElement(tagName, options);
+            var tag = tagName ? tagName.toLowerCase() : '';
+            if (tag === 'script') {
+                var origSetAttrScript = el.setAttribute.bind(el);
+                el.setAttribute = function(name, value) {
+                    if (name && name.toLowerCase() === 'src' && value) {
+                        value = appendTimestamp(value);
+                    }
+                    return origSetAttrScript(name, value);
+                };
+                Object.defineProperty(el, 'src', {
+                    set: function(val) { el.setAttribute('src', val); },
+                    get: function() { return el.getAttribute('src') || ''; },
+                    configurable: true
+                });
+            } else if (tag === 'link') {
+                var origSetAttrLink = el.setAttribute.bind(el);
+                el.setAttribute = function(name, value) {
+                    if (name && name.toLowerCase() === 'href' && value && (el.rel === 'stylesheet' || !el.rel)) {
+                        value = appendTimestamp(value);
+                    }
+                    return origSetAttrLink(name, value);
+                };
+                Object.defineProperty(el, 'href', {
+                    set: function(val) { el.setAttribute('href', val); },
+                    get: function() { return el.getAttribute('href') || ''; },
+                    configurable: true
+                });
+            }
+            return el;
+        };
+
+        // 4. Global Hard-Purge Cache & Reload Function
+        window.CaptalvoBustCacheAndReload = async function(silent) {
+            if (!silent) {
+                console.log('[Captalvo] Purgando caches, service workers, sessões e cookies...');
+            }
+            try {
+                if ('caches' in window) {
+                    var keys = await caches.keys();
+                    await Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                }
+            } catch (e) {}
+
+            try {
+                if ('serviceWorker' in navigator) {
+                    var regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(function(r) { return r.unregister(); }));
+                }
+            } catch (e) {}
+
+            try {
+                sessionStorage.clear();
+                var toRemove = [];
+                for (var i = 0; i < localStorage.length; i++) {
+                    var k = localStorage.key(i);
+                    if (k && !k.startsWith('captalvo_persistent_')) {
+                        toRemove.push(k);
+                    }
+                }
+                toRemove.forEach(function(k) { localStorage.removeItem(k); });
+            } catch (e) {}
+
+            try {
+                var cookies = document.cookie.split(';');
+                for (var j = 0; j < cookies.length; j++) {
+                    var c = cookies[j];
+                    var eq = c.indexOf('=');
+                    var name = eq > -1 ? c.substring(0, eq).trim() : c.trim();
+                    if (name) {
+                        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + window.location.hostname;
+                        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+                    }
+                }
+            } catch (e) {}
+
+            var cleanUrl = window.location.origin + window.location.pathname + '?_nocache=' + Date.now();
+            window.location.replace(cleanUrl);
+        };
+    })();
+    </script>
+
+    <link rel="stylesheet" href="captalvo.css?t=1793803745">
 </head>
 <body>
 
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <div class="brand-badge">
-                <span class="pulse-dot"></span>
-                <span>Captalvo System Core &bull; Versão 0.2.0-Alpha</span>
+    <!-- Fullscreen Cinematic Intro & Real Loading HUD Overlay -->
+    <div id="intro-video-overlay" style="display:none;">
+        <video id="intro-video" src="Command-Conquer-Generals-Zero-Hour-Intro-1080p.mp4" playsinline preload="auto"></video>
+        
+        <!-- HUD de Carregamento Sobreposto -->
+        <div id="intro-loading-hud" class="intro-hud-overlay">
+            <div class="intro-hud-header">
+                <div class="intro-hud-brand">
+                    <span class="intro-hud-tag">SISTEMA MILITAR GLOBAL &bull; C&amp;C GENERALS</span>
+                    <h3 id="intro-loading-status" class="intro-hud-title">INICIALIZANDO ZERO HOUR</h3>
+                </div>
+                <div id="intro-loading-pct" class="intro-hud-pct">0%</div>
             </div>
-            <h1 class="main-title">Seletor de Motor Zero Hour</h1>
-            <p class="subtitle">
-                Arquitetura dual e independente para execução de <strong>Command &amp; Conquer Generals: Zero Hour</strong> no navegador. Escolha o motor para iniciar sua simulação tática.
-            </p>
-        </header>
-
-        <!-- Hardware & Feature Probe Bar -->
-        <div class="hardware-probe-bar">
-            <div class="probe-items">
-                <div class="probe-item">
-                    <span class="probe-label">GPU WebGL 2.0:</span>
-                    <span id="probe-webgl-status" class="badge-status badge-ready">Testando...</span>
-                </div>
-                <div class="probe-item">
-                    <span class="probe-label">WebGPU Nativo:</span>
-                    <span id="probe-webgpu-status" class="badge-status badge-warn">Verificando...</span>
-                </div>
-                <div class="probe-item">
-                    <span class="probe-label">RAM / Heap:</span>
-                    <span id="probe-ram-status" class="probe-value">-- GB</span>
-                </div>
-                <div class="probe-item">
-                    <span class="probe-label">Isolamento COOP/COEP:</span>
-                    <span id="probe-coi-status" class="badge-status badge-ready">--</span>
-                </div>
+            <div class="progress-track intro-progress-track">
+                <div id="intro-loading-fill" class="progress-fill"></div>
             </div>
-            <div id="probe-details" style="color:var(--text-muted); font-size:11px;">
-                Identificando subsistemas de renderização...
+            <div class="intro-hud-footer">
+                <span id="intro-loading-detail" class="intro-hud-detail">Preparando arquivos do jogo...</span>
+                <span id="intro-video-time" class="intro-hud-timer">00:00 / 01:11</span>
             </div>
         </div>
 
-        <!-- Engine Cards -->
-        <div class="engine-grid">
-            <!-- Card 1: WebGL 2.0 Engine -->
-            <div class="engine-card card-webgl">
-                <div class="card-top">
-                    <div class="card-header-bar">
-                        <span class="engine-tag tag-webgl">Motor Atual</span>
-                        <span class="badge-status badge-ready">Menu Navegável &amp; Clicável</span>
-                    </div>
+        <!-- Botão Pular Introdução (Aparece somente quando o jogo estiver 100% carregado) -->
+        <button id="btn-skip-intro" class="btn-skip-intro" type="button" style="display:none;">
+            Pular Introdução ▶
+        </button>
+    </div>
 
-                    <h2 class="engine-title">
-                        <span>WebGL 2.0 (SAGE)</span>
-                    </h2>
+    <!-- WebGL Game Canvas Container -->
+    <div id="game-container" style="display:none;">
+        <canvas id="canvas" tabindex="-1" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
 
-                    <p class="engine-desc">
-                        Nossa implementação clássica do motor Zero Hour adaptada com WebAssembly, SDL2 e subsistema de áudio Miles Sound System emulada via Web Audio API.
-                    </p>
+    <!-- In-Game Floating Escape Bar -->
+    <div id="game-escape-bar" style="display:none;">
+        <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
+        <button id="btn-game-afterburner" type="button">🔥 Afterburner</button>
+        <button id="btn-game-console" type="button">💻 Console</button>
+        <span id="game-fps-counter" class="game-hud-fps">-- FPS</span>
+    </div>
 
-                    <ul class="feature-list">
-                        <li>
-                            <span class="feature-icon">✓</span>
-                            <span><strong>Menu 100% Interativo:</strong> Cursor e cliques calibrados em 800x600 nativo com navegação completa pelos botões originais.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">✓</span>
-                            <span><strong>Áudio Completo da UI:</strong> Efeitos sonoros (`uboarder.wav`, `ubuttons.wav`) pré-alocados sem erros de carregamento.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">✓</span>
-                            <span><strong>Suíte de Diagnóstico:</strong> Afterburner HUD com frametimes frame a frame, medidor de I/O de disco e terminal de logs.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">✓</span>
-                            <span><strong>Armazenamento OPFS:</strong> Arquivos salvos localmente no navegador (`zero_hour_assets`).</span>
-                        </li>
-                    </ul>
+    <!-- Home View: Tactical Matrix & Brand Stack -->
+    <main id="home-main">
+        <canvas id="map" aria-hidden="true"></canvas>
 
-                    <div class="notice-box notice-webgl">
-                        <strong>Status:</strong> Menu e interface funcionais. O carregamento de partidas completas ainda apresenta travamentos sob investigação na engine.
-                    </div>
-                </div>
+        <div class="stack">
+            <p class="eyebrow">Projeto em desenvolvimento</p>
+            <canvas id="logo" role="img" aria-label="Símbolo de bandeira do Captalvo"></canvas>
 
-                <a href="/webgl2/" class="btn-launch btn-webgl">
-                    <span>▶ Iniciar WebGL 2.0</span>
-                </a>
+            <div class="titles">
+                <h1 class="status" id="status">CAPTALVO</h1>
+                <p class="tagline">Conquista sem limites.</p>
+                <p class="description">Simulador de Guerra Global Virtual</p>
             </div>
 
-            <!-- Card 2: WebGPU Engine (Origami) -->
-            <div class="engine-card card-webgpu">
-                <div class="card-top">
-                    <div class="card-header-bar">
-                        <span class="engine-tag tag-webgpu">Nova Arquitetura</span>
-                        <span id="badge-webgpu-engine" class="badge-status badge-warn">Verificando WebGPU</span>
+            <span class="rule" aria-hidden="true"></span>
+
+            <p class="note">Um mundo para construir, expandir e conquistar.</p>
+
+            <!-- Action Area: Botão que abre o modal para começar o jogo e revela menus -->
+            <div class="launcher-cta-wrap">
+                <button id="btn-open-launcher" class="btn-launcher-cta" type="button">
+                    <span class="btn-pulse-dot"></span>
+                    <span class="btn-cta-label">COMEÇAR O JOGO</span>
+                    <span class="btn-cta-badge">ALPHA 0.1</span>
+                </button>
+
+                <!-- Quick Dock com atalhos diretos -->
+                <div id="home-quick-dock" class="quick-dock hidden">
+                    <a href="/webgl2/" class="dock-pill btn-primary" style="text-decoration:none; display:inline-flex; align-items:center;">
+                        ▶ JOGAR WEBGL 2.0
+                    </a>
+                    <a href="/webgpu/" class="dock-pill" style="text-decoration:none; display:inline-flex; align-items:center; border-color:#00d9ff; color:#00d9ff;">
+                        ⚡ JOGAR WEBGPU
+                    </a>
+                    <button id="btn-dock-files" class="dock-pill" type="button">
+                        📁 ARQUIVOS DO JOGO
+                    </button>
+                    <button id="btn-dock-import" class="dock-pill" type="button">
+                        📁 IMPORTAR .BIG
+                    </button>
+                    <button id="btn-dock-afterburner" class="dock-pill" type="button">
+                        🔥 AFTERBURNER
+                    </button>
+                    <button id="btn-dock-diag" class="dock-pill" type="button">
+                        🔬 DIAGNÓSTICO
+                    </button>
+                    <button id="btn-dock-console" class="dock-pill" type="button">
+                        💻 CONSOLE
+                    </button>
+                    <button id="btn-dock-settings" class="dock-pill" type="button">
+                        ⚙️ CONFIGURAÇÕES
+                    </button>
+                </div>
+
+                <div class="engine-meta-note">
+                    Arquitetura Dual &middot; WebGL 2.0 (Atual) &amp; WebGPU (Origami)
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>
+                CAPTALVO.ONLINE &nbsp;&middot;&nbsp; ALPHA EM PREPARAÇÃO &nbsp;&middot;&nbsp; 
+                <a href="https://github.com/captalvo-tech/captalvo" target="_blank" rel="noopener noreferrer">GITHUB</a>
+            </p>
+        </footer>
+    </main>
+
+    <!-- Hidden File Input for fallback selection -->
+    <input type="file" id="file-input-fallback" multiple accept=".big" style="display: none;">
+
+    <!-- Modal: Launcher / Central de Operações -->
+    <div id="modal-launcher" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Central de Operações &middot; Alpha</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Status Card -->
+                <div class="status-card">
+                    <div class="status-row">
+                        <span class="status-label">Armazenamento Navegador:</span>
+                        <span id="storage-badge" class="status-badge badge-info">Detectando...</span>
                     </div>
-
-                    <h2 class="engine-title">
-                        <span>WebGPU (Origami)</span>
-                    </h2>
-
-                    <p class="engine-desc">
-                        Segunda implementação independente baseada no projeto <strong>GeneralsX Web</strong> (origami-ltd/wasm-generals), desenvolvida sobre WebGPU e multi-threading via SharedArrayBuffer.
-                    </p>
-
-                    <ul class="feature-list">
-                        <li>
-                            <span class="feature-icon">⚡</span>
-                            <span><strong>Pipeline WebGPU:</strong> Renderização moderna com shaders compilados via DXVK e alocação de heap WASM de 2 GiB.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">⚡</span>
-                            <span><strong>Worker Multi-thread:</strong> Simulação desacoplada da thread de renderização para maior taxa de quadros e tolerância a abas em segundo plano.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">⚡</span>
-                            <span><strong>Streaming Sob Demanda:</strong> Acesso direto via File System Access API para montar pastas originais do jogo.</span>
-                        </li>
-                        <li>
-                            <span class="feature-icon">⚡</span>
-                            <span><strong>Origami Build 46382a3:</strong> Versão upstream congelada e instalada diretamente no domínio Captalvo.</span>
-                        </li>
-                    </ul>
-
-                    <div id="notice-webgpu-box" class="notice-box notice-webgpu">
-                        <strong>Requisitos:</strong> Exige suporte nativo a WebGPU no navegador (Google Chrome 113+, Microsoft Edge 113+) e no mínimo 8 GB de RAM recomendada.
+                    <div class="status-row">
+                        <span class="status-label">Arquivos do Jogo (.BIG):</span>
+                        <span id="assets-badge" class="status-badge badge-missing">Verificando...</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">Servidor Backend:</span>
+                        <span id="backend-badge" class="status-badge badge-info">Conectando...</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">Modo de Armazenamento:</span>
+                        <select id="select-storage-mode" class="select-tactical">
+                            <option value="automatic">AUTOMÁTICO (Adaptativo)</option>
+                            <option value="turbo">TURBO (Pré-carregamento RAM)</option>
+                            <option value="balanced">EQUILIBRADO (OPFS + RAM)</option>
+                            <option value="economic">ECONÔMICO (Menor uso RAM)</option>
+                        </select>
                     </div>
                 </div>
 
-                <button id="btn-launch-webgpu" type="button" class="btn-launch btn-webgpu" onclick="window.location.href='/webgpu/'">
-                    <span>▶ Iniciar WebGPU (Origami)</span>
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <!-- Dual Engine Selector Cards -->
+                    <div class="dual-engine-selector" style="display:flex; flex-direction:column; gap:12px; margin-bottom:12px;">
+                        <!-- Engine 1: WebGL 2.0 -->
+                        <div style="background:rgba(46,204,113,0.08); border:1px solid rgba(46,204,113,0.35); border-radius:8px; padding:14px; text-align:left;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <strong style="color:#2ecc71; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Motor WebGL 2.0 (SAGE)</strong>
+                                <span class="status-badge badge-ready" style="font-size:10px;">Menu 100% Clicável</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.4;">
+                                Menu original interativo, áudio de interface calibrado, HUD Afterburner e telemetria.
+                                <br><small style="color:#f1c40f;">⚠️ Partidas 3D em desenvolvimento (travamentos sob investigação).</small>
+                            </p>
+                            <div style="display:flex; gap:8px;">
+                                <a href="/webgl2/" class="btn-primary" style="flex:1; text-align:center; text-decoration:none; padding:10px 14px; font-size:12px; font-weight:700;">
+                                    ▶ INICIAR WEBGL 2.0
+                                </a>
+                                <button id="btn-play" class="btn-secondary" type="button" style="padding:10px 14px; font-size:12px;" disabled title="Carregar no modo local">
+                                    Jogar Aqui
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Engine 2: WebGPU Origami -->
+                        <div style="background:rgba(0,217,255,0.08); border:1px solid rgba(0,217,255,0.35); border-radius:8px; padding:14px; text-align:left;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <strong style="color:#00d9ff; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Motor WebGPU (Origami)</strong>
+                                <span class="status-badge badge-info" style="font-size:10px;">Nova Engine</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.4;">
+                                Implementação baseada em GeneralsX (origami-ltd commit 46382a3). Heap de 2 GiB e shaders DXVK.
+                                <br><small style="color:#00d9ff;">⚡ Requer navegador com suporte a WebGPU (Chrome 113+, Edge 113+).</small>
+                            </p>
+                            <a href="/webgpu/" class="btn-primary" style="display:block; text-align:center; text-decoration:none; padding:10px 14px; font-size:12px; font-weight:700; background:linear-gradient(135deg,#00d9ff,#0099cc); color:#020b12;">
+                                ⚡ INICIAR WEBGPU (ORIGAMI)
+                            </a>
+                        </div>
+                    </div>
+                    <button id="btn-open-game-files" class="btn-secondary" style="border-color:var(--accent-gold); color:var(--accent-gold);" type="button">
+                        📁 Gerenciador de Arquivos do Jogo (.BIG)
+                    </button>
+                    <button id="btn-import-assets" class="btn-secondary" type="button">
+                        📥 Importação Rápida de Pasta
+                    </button>
+
+                    <div class="button-grid">
+                        <button id="btn-diag" class="btn-secondary" type="button">
+                            🔬 Diagnósticos
+                        </button>
+                        <button id="btn-afterburner" class="btn-secondary" type="button">
+                            🔥 Afterburner HUD
+                        </button>
+                        <button id="btn-toggle-console" class="btn-secondary" type="button">
+                            💻 Console
+                        </button>
+                        <button id="btn-settings" class="btn-secondary" type="button">
+                            ⚙️ Configurações
+                        </button>
+                        <button id="btn-info" class="btn-secondary" type="button">
+                            ℹ️ Sobre a Alpha
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Progress -->
+                <div id="progress-container">
+                    <div class="progress-header">
+                        <span id="main-progress-status">INICIALIZANDO MOTOR</span>
+                    </div>
+                    <div class="progress-track">
+                        <div id="main-progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div id="main-progress-detail" class="progress-detail">Carregando módulos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Import Assets -->
+    <div id="modal-import" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Importar Arquivos do Jogo</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    Por motivos de conformidade de direitos autorais, os dados comerciais de 
+                    <strong>Command &amp; Conquer: Generals Zero Hour</strong> não são distribuídos em nosso servidor público.
+                </p>
+                <p>
+                    Selecione a pasta onde seu jogo legítimo está instalado (EA App ou Steam) para carregar os arquivos 
+                    diretamente no armazenamento privativo do seu navegador (OPFS). 
+                    <strong>Nenhum arquivo comercial é enviado para a internet.</strong>
+                </p>
+
+                <div id="import-drop-zone" class="drop-zone">
+                    <div class="drop-icon">📂</div>
+                    <strong style="display:block; margin-bottom:6px; color:var(--accent-gold);">
+                        Clique abaixo para selecionar sua pasta do jogo
+                    </strong>
+                    <span style="font-size:11px; color:var(--muted);">
+                        Ex: <code>D:\Command and Conquer Generals Zero Hour</code> ou arraste arquivos <code>.big</code> aqui
+                    </span>
+                </div>
+
+                <div class="button-grid" style="margin-bottom: 14px;">
+                    <button id="btn-pick-folder" class="btn-primary" style="font-size: 13px; padding: 12px;" type="button">
+                        Selecionar Pasta Completa
+                    </button>
+                    <button id="btn-pick-files" class="btn-secondary" style="font-size: 13px; padding: 12px;" type="button">
+                        Selecionar Arquivos .BIG
+                    </button>
+                </div>
+
+                <div id="import-progress-wrap" style="display:none; margin-bottom:14px;">
+                    <div class="progress-track">
+                        <div id="import-progress-bar" class="progress-fill"></div>
+                    </div>
+                    <div id="import-progress-detail" class="progress-detail">Inspecionando arquivos...</div>
+                </div>
+
+                <!-- Checklist Banner da Pasta Selecionada -->
+                <div id="folder-checklist-banner" style="display:none; margin-bottom: 14px; padding: 12px 14px; background: rgba(229, 169, 59, 0.12); border: 1px solid rgba(229, 169, 59, 0.4); border-radius: 4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span id="folder-checklist-title" style="font-weight:700; color:var(--accent-gold); font-size:13px;">Checklist da Pasta: 0 arquivos</span>
+                        <span id="folder-checklist-status" class="status-badge badge-ready">Validado</span>
+                    </div>
+                    <div id="folder-checklist-subtitle" style="font-size:11px; color:var(--muted); margin-top:4px;">
+                        Arquivos identificados na pasta e prontos para inicialização.
+                    </div>
+                </div>
+
+                <button id="btn-modal-play" class="btn-primary" style="display:none; width:100%; font-size:14px; padding:14px; margin-bottom:14px;" type="button">
+                    ▶ JOGAR C&amp;C GENERALS ZERO HOUR
+                </button>
+
+                <h4>Checklist dos Arquivos</h4>
+                <div id="modal-asset-list" class="asset-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- Modal: Independent Game Files Manager (Section 4.3) -->
+    <div id="modal-game-files" class="modal-overlay">
+        <div class="modal-card" style="width: min(980px, 96vw); max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title">📁 Arquivos do Jogo &middot; Asset Manager</h3>
+                    <div class="modal-subtitle">Gerenciamento direto dos 33 arquivos (.big) no navegador &bull; OPFS &bull; IndexedDB</div>
+                </div>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; flex: 1;">
+                <!-- Quota & Status Summary Banner -->
+                <div class="storage-summary-banner">
+                    <div class="storage-sum-item">
+                        <span class="storage-sum-label">Cota do Navegador:</span>
+                        <span id="gf-quota-val" class="storage-sum-val">-- GB</span>
+                    </div>
+                    <div class="storage-sum-item">
+                        <span class="storage-sum-label">Espaço Utilizado:</span>
+                        <span id="gf-used-val" class="storage-sum-val">-- MB</span>
+                    </div>
+                    <div class="storage-sum-item">
+                        <span class="storage-sum-label">Persistência OPFS:</span>
+                        <span id="gf-persisted-val" class="status-badge badge-ready">Ativo</span>
+                    </div>
+                    <div class="storage-sum-item">
+                        <span class="storage-sum-label">Cache em RAM:</span>
+                        <span id="gf-ram-cache-val" class="storage-sum-val">-- MB</span>
+                    </div>
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="game-files-toolbar">
+                    <button id="gf-btn-import-folder" class="btn-primary" style="font-size:12px; padding:8px 14px;" type="button">
+                        📂 Importar Pasta do Jogo
+                    </button>
+                    <button id="gf-btn-import-files" class="btn-secondary" style="font-size:12px; padding:8px 14px;" type="button">
+                        📄 Importar Arquivos .BIG
+                    </button>
+                    <button id="gf-btn-verify-all" class="btn-secondary" style="font-size:12px; padding:8px 14px;" type="button">
+                        🔍 Verificar Integridade Geral
+                    </button>
+                    <button id="gf-btn-clear-ram" class="btn-secondary" style="font-size:12px; padding:8px 14px; border-color:var(--accent-gold); color:var(--accent-gold);" type="button">
+                        🧹 Limpar Cache RAM
+                    </button>
+                    <button id="gf-btn-wipe-all" class="btn-secondary" style="font-size:12px; padding:8px 14px; border-color:var(--accent-red); color:var(--accent-red);" type="button">
+                        🗑️ Excluir Todos os Arquivos
+                    </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div id="gf-progress-wrap" style="display:none; margin: 12px 0;">
+                    <div class="progress-track">
+                        <div id="gf-progress-bar" class="progress-fill"></div>
+                    </div>
+                    <div id="gf-progress-detail" class="progress-detail">Processando...</div>
+                </div>
+
+                <!-- Files Table -->
+                <div class="game-files-table-wrap">
+                    <table class="tactical-table">
+                        <thead>
+                            <tr>
+                                <th>Arquivo</th>
+                                <th>Tipo</th>
+                                <th>Tamanho</th>
+                                <th>Hash SHA-256</th>
+                                <th>Integridade</th>
+                                <th>RAM</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="game-files-table-body">
+                            <!-- Dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Settings -->
+    <div id="modal-settings" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Configurações</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>Gráficos e Desempenho</h4>
+                <div style="margin-bottom: 14px;">
+                    <label style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Limite de Taxa de Quadros (FPS):</span>
+                        <select id="setting-fps" style="background:#090e0b; color:var(--ink); border:1px solid var(--border-color); padding:6px 10px; border-radius:4px;">
+                            <option value="30">30 FPS (Fiel ao original)</option>
+                            <option value="60">60 FPS (Recomendado)</option>
+                            <option value="120">120 FPS (Alta taxa)</option>
+                            <option value="0">V-Sync Automático</option>
+                        </select>
+                    </label>
+                </div>
+
+                <h4>Controles e Mouse</h4>
+                <div style="margin-bottom: 12px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="setting-lock-cursor">
+                        <span>Travar ponteiro do mouse na janela do jogo (Confinamento)</span>
+                    </label>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="setting-edge-scroll" checked>
+                        <span>Rolagem de câmera nas bordas da tela (Edge Scrolling)</span>
+                    </label>
+                </div>
+
+                <h4>Cache do Navegador &amp; Atualizações</h4>
+                <p style="font-size:12px;">
+                    Durante a fase de desenvolvimento, você pode forçar a invalidação completa de cache, cookies e Service Workers para baixar imediatamente a versão mais recente dos scripts.
+                </p>
+                <button id="btn-force-cache-bust" class="btn-secondary" style="border-color:var(--accent-gold); color:var(--accent-gold); margin-bottom:14px; width:100%;" type="button">
+                    🧹 Limpar Cache do Navegador &amp; Recarregar
+                </button>
+
+                <h4>Armazenamento Local</h4>
+                <p style="font-size:12px;">
+                    Os arquivos do jogo e configurações ficam salvos no cache seguro do navegador (OPFS).
+                </p>
+                <button id="btn-wipe-storage" class="btn-secondary" style="border-color:var(--accent-red); color:var(--accent-red); width:100%;" type="button">
+                    Limpar Todos os Dados e Arquivos Locais
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer>
-        <div>
-            <strong>CAPTALVO.ONLINE</strong> &bull; Simulador Militar Global Virtual &bull;
-            Desenvolvido sobre código EA Generals / GeneralsX (GPL-3.0 + EA Terms) &bull;
-            Origami GeneralsX (MIT-PoU)
-        </div>
-        <div class="footer-links">
-            <a href="https://github.com/captalvo-tech/captalvo" target="_blank" rel="noopener noreferrer">GitHub Captalvo</a>
-            <a href="https://github.com/origami-ltd/wasm-generals" target="_blank" rel="noopener noreferrer">Origami Upstream</a>
-            <a href="/api/health" target="_blank">Status da API</a>
-        </div>
-    </footer>
+    <!-- Modal: Alpha Information -->
+    <div id="modal-info" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Sobre o Captalvo Alpha</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>Visão do Projeto</h4>
+                <p>
+                    <strong>Captalvo — Simulador de Guerra Global Virtual</strong>.<br>
+                    Nosso objetivo é construir uma experiência tática de conquista territorial em larga escala, aproveitando a robustez e jogabilidade clássica do motor <em>Command &amp; Conquer: Generals Zero Hour</em> portado nativamente para a Web (WebAssembly + WebGL 2.0).
+                </p>
 
-    <!-- Hardware Detection Script -->
+                <h4>Base Técnica</h4>
+                <p>
+                    O cliente roda inteiramente no navegador via WebAssembly compilado a partir do código-fonte liberado pela <em>Electronic Arts</em> sob a licença GPL v3, com suporte a renderização Direct3D 8 para WebGL 2.0.
+                </p>
+
+                <h4>Aviso Legal e Direitos</h4>
+                <p style="font-size:11px; color:var(--muted); line-height:1.5;">
+                    <em>Electronic Arts Inc.</em> não patrocinou, endossou ou aprovou este projeto de forma alguma. "Command &amp; Conquer" e "Generals Zero Hour" são marcas registradas da Electronic Arts. O projeto Captalvo não redistribui nenhum arquivo de mídia, áudio, modelo 3D ou mapa proprietário original. Todos os dados são carregados estritamente pelo próprio usuário a partir de sua cópia legítima local.
+                </p>
+
+                <h4>Roadmap da Alpha</h4>
+                <p>
+                    <strong>Marco 1:</strong> Estabilização do motor WebAssembly no domínio oficial captalvo.online.<br>
+                    <strong>Marco 2:</strong> Modo de jogo Captalvo com mecânica de Trabalhador inicial (inspiração Worker GLA), demarcação de território com bandeira e construção de abrigo básico.<br>
+                    <strong>Marco 3:</strong> Persistência de mundo e economia global via backend PHP 8.3 e MySQL.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: System Diagnostics -->
+    <div id="modal-diag" class="modal-overlay">
+        <div class="modal-card" style="width: min(940px, 96vw); max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title">🔬 Captalvo Diagnostics &middot; Painel Técnico &amp; Admin</h3>
+                    <div class="modal-subtitle">Observabilidade total da Engine &bull; I/O de Arquivos &bull; Telemetria LGPD</div>
+                </div>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; flex: 1;">
+                <!-- Navigation Tabs -->
+                <div class="tactical-tabs-nav">
+                    <button class="tactical-tab-btn active" data-tab="diag-tab-overview" type="button">📊 Visão Geral</button>
+                    <button class="tactical-tab-btn" data-tab="diag-tab-ranking" type="button">📈 Ranking de Arquivos</button>
+                    <button class="tactical-tab-btn" data-tab="diag-tab-sessions" type="button">⏱️ Sessões &amp; Timeline</button>
+                    <button class="tactical-tab-btn" data-tab="diag-tab-modes" type="button">🚀 Modos de Armazenamento</button>
+                    <button class="tactical-tab-btn" data-tab="diag-tab-consent" type="button">🛡️ Consentimento LGPD</button>
+                </div>
+
+                <!-- Tab 1: Overview -->
+                <div id="diag-tab-overview" class="tactical-tab-pane active">
+                <p style="font-size:12px; margin-bottom:14px;">
+                    Painel de conformidade técnica para execução do motor Zero Hour em WebAssembly + WebGL 2.0.
+                </p>
+
+                <div class="diag-grid">
+                    <!-- GPU & WebGL2 -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>🎮 Renderizador GPU</span>
+                            <span id="diag-gpu-pill" class="diag-pill ok">Detectando</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">API:</span><span id="diag-gpu-api" class="diag-val">WebGL 2.0</span></div>
+                        <div class="diag-row"><span class="diag-key">Fabricante:</span><span id="diag-gpu-vendor" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Placa de Vídeo:</span><span id="diag-gpu-renderer" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Textura Máx:</span><span id="diag-gpu-max-tex" class="diag-val">--</span></div>
+                    </div>
+
+                    <!-- WebAssembly & Threads -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>⚙️ Motor WebAssembly</span>
+                            <span id="diag-wasm-pill" class="diag-pill ok">Ativo</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">WASM Suporte:</span><span id="diag-wasm-status" class="diag-val">SIM</span></div>
+                        <div class="diag-row"><span class="diag-key">SharedArrayBuffer:</span><span id="diag-sab-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Cross-Origin Isolated:</span><span id="diag-coi-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Heap Memory:</span><span id="diag-wasm-heap" class="diag-val">--</span></div>
+                    </div>
+
+                    <!-- Audio -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>🔊 WebAudio Bridge</span>
+                            <span id="diag-audio-pill" class="diag-pill ok">Pronto</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">AudioContext:</span><span id="diag-audio-state" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Sample Rate:</span><span id="diag-audio-rate" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">OpenAL Bridge:</span><span class="diag-val">Emscripten AL</span></div>
+                    </div>
+
+                    <!-- Storage & VFS -->
+                    <div class="diag-card">
+                        <div class="diag-card-title">
+                            <span>💾 Armazenamento & VFS</span>
+                            <span id="diag-vfs-pill" class="diag-pill ok">OPFS</span>
+                        </div>
+                        <div class="diag-row"><span class="diag-key">Storage Driver:</span><span id="diag-storage-driver" class="diag-val">OPFS</span></div>
+                        <div class="diag-row"><span class="diag-key">Service Worker:</span><span id="diag-sw-status" class="diag-val">--</span></div>
+                        <div class="diag-row"><span class="diag-key">Filtro Range HTTP:</span><span class="diag-val">Status 206 Local</span></div>
+                        <div class="diag-row"><span class="diag-key">Arquivos .BIG:</span><span id="diag-big-count" class="diag-val">0</span></div>
+                    </div>
+                </div>
+
+                <div class="diag-card" style="margin-bottom:16px;">
+                    <div class="diag-card-title">
+                        <span>🌐 Conectividade Backend & API</span>
+                        <span id="diag-backend-pill" class="diag-pill ok">Online</span>
+                    </div>
+                    <div class="diag-row"><span class="diag-key">Health Endpoint:</span><span class="diag-val">https://captalvo.online/api/health</span></div>
+                    <div class="diag-row"><span class="diag-key">Latência Servidor:</span><span id="diag-api-latency" class="diag-val">-- ms</span></div>
+                    <div class="diag-row"><span class="diag-key">Versão PHP:</span><span id="diag-php-version" class="diag-val">PHP 8.3</span></div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <button id="btn-run-diag" class="btn-primary" style="font-size:12px; padding:10px 16px;" type="button">
+                        🔄 Atualizar Diagnóstico
+                    </button>
+                    <button id="btn-diag-cache-bust" class="btn-secondary" style="font-size:12px; padding:10px 16px; border-color:var(--accent-gold); color:var(--accent-gold);" type="button">
+                        ⚡ Purgar Cache &amp; Recarregar
+                    </button>
+                    <button id="btn-copy-diag-report" class="btn-secondary" style="font-size:12px; padding:10px 16px;" type="button">
+                        📋 Copiar Relatório Completo
+                    </button>
+                </div>
+                </div><!-- End Tab 1 Overview -->
+
+                <!-- Tab 2: Ranking de Arquivos -->
+                <div id="diag-tab-ranking" class="tactical-tab-pane">
+                    <p style="font-size:12px; margin-bottom:12px; color:var(--muted);">
+                        Ranking de operações de I/O em tempo real. Identifica arquivos com maior tráfego, maior latência e taxa de acerto no cache RAM.
+                    </p>
+                    <div class="game-files-table-wrap">
+                        <table class="tactical-table">
+                            <thead>
+                                <tr>
+                                    <th>Arquivo</th>
+                                    <th>Leituras</th>
+                                    <th>Volume (MB)</th>
+                                    <th>Cache Hit %</th>
+                                    <th>Latência p50</th>
+                                    <th>Latência p95</th>
+                                    <th>Espera Acum.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="diag-ranking-table-body">
+                                <tr><td colspan="7" style="text-align:center; color:var(--muted);">Nenhuma leitura registrada ainda.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Sessões & Timeline -->
+                <div id="diag-tab-sessions" class="tactical-tab-pane">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div>
+                            <strong>Sessão Atual:</strong> <code id="diag-sess-id-val" style="color:var(--accent-gold);">--</code>
+                        </div>
+                        <button id="btn-refresh-sessions" class="btn-secondary" style="font-size:11px; padding:6px 12px;" type="button">
+                            🔄 Atualizar do Servidor
+                        </button>
+                    </div>
+                    <div id="diag-sessions-container" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Tab 4: Modos de Armazenamento -->
+                <div id="diag-tab-modes" class="tactical-tab-pane">
+                    <div class="diag-grid" style="margin-bottom:14px;">
+                        <div class="diag-card">
+                            <div class="diag-card-title">
+                                <span>AUTOMÁTICO</span>
+                                <span class="diag-pill ok">Padrão</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin: 6px 0;">
+                                Ajusta o orçamento de RAM dinamicamente conforme a capacidade do dispositivo. Ideal para a maioria dos computadores.
+                            </p>
+                            <div class="diag-row"><span class="diag-key">Orçamento RAM:</span><span class="diag-val">384 MB - 1.2 GB</span></div>
+                            <div class="diag-row"><span class="diag-key">Fonte Primária:</span><span class="diag-val">OPFS + RAM LRU</span></div>
+                        </div>
+
+                        <div class="diag-card">
+                            <div class="diag-card-title">
+                                <span>TURBO</span>
+                                <span class="diag-pill ok">Máximo Desempenho</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin: 6px 0;">
+                                Pré-carrega todos os arquivos essenciais e texturas completas na memória RAM antes de iniciar o motor.
+                            </p>
+                            <div class="diag-row"><span class="diag-key">Orçamento RAM:</span><span class="diag-val">Até 1.5 GB</span></div>
+                            <div class="diag-row"><span class="diag-key">Latência I/O:</span><span class="diag-val">&lt; 0.05 ms</span></div>
+                        </div>
+
+                        <div class="diag-card">
+                            <div class="diag-card-title">
+                                <span>EQUILIBRADO</span>
+                                <span class="diag-pill ok">Balanceado</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin: 6px 0;">
+                                Mantém arquivos vitais (INI, CSF, Window) em RAM e lê dados pesados sob demanda através do OPFS.
+                            </p>
+                            <div class="diag-row"><span class="diag-key">Orçamento RAM:</span><span class="diag-val">512 MB</span></div>
+                            <div class="diag-row"><span class="diag-key">Fonte Primária:</span><span class="diag-val">OPFS Persistente</span></div>
+                        </div>
+
+                        <div class="diag-card">
+                            <div class="diag-card-title">
+                                <span>ECONÔMICO</span>
+                                <span class="diag-pill ok">Baixo Consumo</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin: 6px 0;">
+                                Minimiza o uso de memória do navegador. Mantém apenas os índices em RAM e evita pré-carregamento.
+                            </p>
+                            <div class="diag-row"><span class="diag-key">Orçamento RAM:</span><span class="diag-val">160 MB</span></div>
+                            <div class="diag-row"><span class="diag-key">Recomendado para:</span><span class="diag-val">Dispositivos &lt; 4 GB RAM</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Consentimento LGPD -->
+                <div id="diag-tab-consent" class="tactical-tab-pane">
+                    <p style="font-size:12px; margin-bottom:14px; color:var(--muted);">
+                        Em conformidade com a LGPD e privacidade técnica: nenhum arquivo proprietário ou dado pessoal é transmitido.
+                        Você pode habilitar ou desabilitar cada categoria de telemetria a qualquer momento.
+                    </p>
+
+                    <div class="consent-toggle-row">
+                        <div class="consent-toggle-info">
+                            <span class="consent-toggle-title">Diagnóstico Técnico Essencial</span>
+                            <span class="consent-toggle-desc">Erros de inicialização, montagem VFS e falhas de runtime necessários para o jogo funcionar.</span>
+                        </div>
+                        <input type="checkbox" id="consent-essential" checked disabled>
+                    </div>
+
+                    <div class="consent-toggle-row">
+                        <div class="consent-toggle-info">
+                            <span class="consent-toggle-title">Métricas de Desempenho (FPS &amp; I/O)</span>
+                            <span class="consent-toggle-desc">Frametimes frame a frame, picos de congelamento e tempos de leitura para otimização da engine.</span>
+                        </div>
+                        <input type="checkbox" id="consent-performance" checked>
+                    </div>
+
+                    <div class="consent-toggle-row">
+                        <div class="consent-toggle-info">
+                            <span class="consent-toggle-title">Perfil Técnico de Hardware</span>
+                            <span class="consent-toggle-desc">Modelo da GPU WebGL, núcleos aproximados e resolução para compatibilidade gráfica.</span>
+                        </div>
+                        <input type="checkbox" id="consent-hardware" checked>
+                    </div>
+
+                    <button id="btn-save-consent" class="btn-primary" style="font-size:12px; padding:10px 18px; margin-top:10px;" type="button">
+                        💾 Salvar Preferências de Privacidade
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Developer Diagnostic Console -->
+    <div id="modal-console" class="modal-overlay">
+        <div class="modal-card modal-console-card">
+            <div class="modal-header">
+                <h3 class="modal-title">💻 Terminal de Diagnóstico &amp; Logs</h3>
+                <div class="dev-console-actions">
+                    <button id="btn-console-sync" class="btn-console-tool" type="button" title="Sincronizar e enviar logs imediatamente ao servidor">☁️ Enviar ao Servidor</button>
+                    <button id="btn-console-copy" class="btn-console-tool" type="button" title="Copiar todos os logs para a área de transferência">📋 Copiar Logs</button>
+                    <button id="btn-console-clear" class="btn-console-tool" type="button" title="Limpar histórico do console">🧹 Limpar</button>
+                    <button class="modal-close" type="button" title="Fechar console">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body console-modal-body">
+                <pre id="dev-console-output"></pre>
+            </div>
+            <form id="dev-console-form" class="dev-console-form">
+                <span class="prompt">&gt;</span>
+                <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'status', 'afterburner', 'copy', 'sendlogs', 'clear'...">
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Afterburner Performance & Hardware Monitor -->
+    <div id="modal-afterburner" class="modal-overlay">
+        <div class="modal-card modal-afterburner-card">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title">🔥 AFTERBURNER &middot; Monitor de Hardware &amp; HUD</h3>
+                    <div class="modal-subtitle">Telemetria ao vivo &bull; WebAssembly / WebGL 2.0 &bull; Perfil de Hardware</div>
+                </div>
+                <div class="afterburner-header-actions">
+                    <button id="btn-toggle-osd" class="btn-console-tool" type="button" title="Fixar / ocultar OSD na tela">📌 Fixar OSD na Tela</button>
+                    <button class="modal-close" type="button" title="Fechar Afterburner">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body afterburner-body">
+                <!-- Top Summary Digital Gauges -->
+                <div class="afterburner-grid-top">
+                    <!-- FPS Counter -->
+                    <div class="af-metric-card af-highlight-fps">
+                        <div class="af-card-label">TAXA DE QUADROS</div>
+                        <div class="af-digital-val"><span id="af-fps-val">--</span> <span class="af-unit">FPS</span></div>
+                        <div class="af-stats-row">
+                            <span>Mín: <b id="af-fps-min">--</b></span>
+                            <span>Méd: <b id="af-fps-avg">--</b></span>
+                            <span>1% Low: <b id="af-fps-1low">--</b></span>
+                        </div>
+                    </div>
+
+                    <!-- Frametime & Real-time Graph -->
+                    <div class="af-metric-card af-highlight-ft">
+                        <div class="af-card-label">FRAMETIME (TEMPO DE QUADRO)</div>
+                        <div class="af-digital-val"><span id="af-ft-val">--</span> <span class="af-unit">ms</span></div>
+                        <div class="af-graph-wrap">
+                            <canvas id="af-ft-canvas" width="220" height="38"></canvas>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Jitter: <b id="af-ft-jitter">-- ms</b></span>
+                            <span>Monitor: <b id="af-refresh-rate">-- Hz</b></span>
+                        </div>
+                    </div>
+
+                    <!-- CPU / Processador -->
+                    <div class="af-metric-card">
+                        <div class="af-card-label">PROCESSADOR (CPU)</div>
+                        <div class="af-digital-val"><span id="af-cpu-load">--</span> <span class="af-unit">%</span></div>
+                        <div class="af-progress-wrap">
+                            <div id="af-cpu-bar" class="af-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Cores: <b id="af-cpu-cores">--</b></span>
+                            <span>Arch: <b id="af-cpu-arch">--</b></span>
+                        </div>
+                    </div>
+
+                    <!-- RAM / Memória -->
+                    <div class="af-metric-card">
+                        <div class="af-card-label">MEMÓRIA RAM</div>
+                        <div class="af-digital-val"><span id="af-ram-used">--</span> <span class="af-unit">MB</span></div>
+                        <div class="af-progress-wrap">
+                            <div id="af-ram-bar" class="af-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Heap: <b id="af-ram-total">-- MB</b></span>
+                            <span>Sist.: <b id="af-ram-system">-- GB</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deep Hardware Profile Details -->
+                <div class="afterburner-details-grid">
+                    <!-- Disco / Storage Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>💾 DISCO &amp; ARMAZENAMENTO</span>
+                            <span id="af-disk-badge" class="status-badge badge-info">Detectando...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Tipo de Disco:</span>
+                            <span class="af-val" id="af-disk-type">Detectando velocidade I/O...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Velocidade Medida:</span>
+                            <span class="af-val" id="af-disk-speed">-- MB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Armazenamento OPFS:</span>
+                            <span class="af-val" id="af-disk-usage">-- MB / -- GB Quota</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Persistência Navegador:</span>
+                            <span class="af-val" id="af-disk-persisted">Verificando...</span>
+                        </div>
+                        <button id="btn-af-benchmark-disk" class="btn-console-tool" style="width:100%; margin-top:10px; padding:6px 10px;" type="button">
+                            ⚡ Rodar Benchmark Rápido de Disco (I/O)
+                        </button>
+                    </div>
+
+                    <!-- Placa de Vídeo / GPU Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🎮 PLACA DE VÍDEO (GPU)</span>
+                            <span id="af-gpu-badge" class="status-badge badge-success">Ativa</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Placa / Renderer:</span>
+                            <span class="af-val" id="af-gpu-renderer">Detectando...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Fabricante WebGL:</span>
+                            <span class="af-val" id="af-gpu-vendor">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">API Gráfica / Shaders:</span>
+                            <span class="af-val" id="af-gpu-api">WebGL 2.0 (GLSL 3.00)</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Máx Texturas:</span>
+                            <span class="af-val" id="af-gpu-max-tex">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Rede / Tráfego (Download & Upload) Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🌐 REDE &amp; CONSUMO</span>
+                            <span id="af-net-badge" class="status-badge badge-info">Online</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Taxa de Download:</span>
+                            <span class="af-val" id="af-net-down-rate">0.0 KB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Taxa de Upload:</span>
+                            <span class="af-val" id="af-net-up-rate">0.0 KB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Volume Trafegado:</span>
+                            <span class="af-val" id="af-net-total">Down: 0 MB &bull; Up: 0 KB</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Conexão &amp; RTT:</span>
+                            <span class="af-val" id="af-net-type">-- (RTT: -- ms)</span>
+                        </div>
+                    </div>
+
+                    <!-- Display & Ambiente Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🖥️ TELA &amp; ENERGIA</span>
+                            <span class="status-badge badge-success">Ativo</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Monitor:</span>
+                            <span class="af-val" id="af-disp-screen">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Janela / DPR:</span>
+                            <span class="af-val" id="af-disp-window">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Cores &amp; HDR:</span>
+                            <span class="af-val" id="af-disp-colors">24 bits (SDR)</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Alimentação / Bateria:</span>
+                            <span class="af-val" id="af-power-status">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="afterburner-footer-bar">
+                    <span class="af-server-sync-info">
+                        ⚡ Telemetria e hardware vinculados à sessão: <code id="af-session-id">--</code>
+                    </span>
+                    <button id="btn-af-sync-telemetry" class="btn-primary" style="font-size:12px; padding:8px 14px;" type="button">
+                        ☁️ Sincronizar Tudo ao Servidor
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating On-Screen Display (OSD Overlay) inspired by MSI Afterburner -->
+    <div id="afterburner-osd" class="afterburner-osd hidden">
+        <div class="osd-drag-handle">
+            <span>⚡ CAPTALVO AF</span>
+            <button id="btn-osd-close" class="osd-btn-close" type="button" title="Fechar OSD">&times;</button>
+        </div>
+        <div class="osd-row"><span class="osd-label">FPS:</span> <span id="osd-fps" class="osd-val-fps">--</span> <span class="osd-unit">FPS</span> <span id="osd-frametime" class="osd-dim">(-- ms)</span></div>
+        <div class="osd-row"><span class="osd-label">CPU:</span> <span id="osd-cpu">-- %</span> <span id="osd-cpu-cores" class="osd-dim">(-- cores)</span></div>
+        <div class="osd-row"><span class="osd-label">RAM:</span> <span id="osd-ram">-- MB</span> <span id="osd-ram-max" class="osd-dim">/ -- GB</span></div>
+        <div class="osd-row"><span class="osd-label">GPU:</span> <span id="osd-gpu" class="osd-val-gpu">--</span></div>
+        <div class="osd-row"><span class="osd-label">DISK:</span> <span id="osd-disk">--</span></div>
+        <div class="osd-row"><span class="osd-label">NET:</span> <span id="osd-net">↓ 0 KB/s &bull; ↑ 0 KB/s</span></div>
+    </div>
+
+    <!-- Captalvo Interactive Simulation Script -->
+    <script src="captalvo-cache.js?t=1793803745"></script>
+    <script src="captalvo-asset-manager.js?t=1793803745"></script>
+    <script src="captalvo-diagnostics.js?t=1793803745"></script>
+    <script src="captalvo-asset-bridge.js?t=1793803745"></script>
+    <script src="captalvo-home-sim.js?t=1793803745"></script>
+
+    <!-- Captalvo Application Script -->
+    <script src="captalvo-app.js?t=1793803745"></script>
+
+    <!-- Safe Non-blocking WebGPU Capability Indicator -->
     <script>
-    (async function initProbe() {
-        const glEl = document.getElementById('probe-webgl-status');
-        const gpuEl = document.getElementById('probe-webgpu-status');
-        const ramEl = document.getElementById('probe-ram-status');
-        const coiEl = document.getElementById('probe-coi-status');
-        const detailsEl = document.getElementById('probe-details');
-        const btnGpu = document.getElementById('btn-launch-webgpu');
-        const badgeGpu = document.getElementById('badge-webgpu-engine');
-        const noticeGpu = document.getElementById('notice-webgpu-box');
-
-        // 1. WebGL 2.0 check
-        try {
-            const cv = document.createElement('canvas');
-            const gl = cv.getContext('webgl2');
-            if (gl) {
-                const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-                const rend = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'Nativo';
-                glEl.textContent = 'Suportado';
-                glEl.className = 'badge-status badge-ready';
-                detailsEl.textContent = 'GPU detectada: ' + rend.split('(')[0].replace('ANGLE', '').trim();
-            } else {
-                glEl.textContent = 'Incompatível';
-                glEl.className = 'badge-status badge-alert';
-            }
-        } catch (e) {
-            glEl.textContent = 'Restrito';
-            glEl.className = 'badge-status badge-alert';
-        }
-
-        // 2. RAM & Cross-Origin Isolation
-        const ramGB = navigator.deviceMemory || 8;
-        ramEl.textContent = ramGB + ' GB Sistema';
-        if (window.crossOriginIsolated) {
-            coiEl.textContent = 'ATIVO (SAB Pronto)';
-            coiEl.className = 'badge-status badge-ready';
-        } else {
-            coiEl.textContent = 'PARCIAL';
-            coiEl.className = 'badge-status badge-warn';
-        }
-
-        // 3. Real WebGPU Check
+    (function checkGpuCapability() {
         if (!navigator.gpu) {
-            gpuEl.textContent = 'Não Suportado';
-            gpuEl.className = 'badge-status badge-alert';
-            badgeGpu.textContent = 'Incompatível no Dispositivo';
-            badgeGpu.className = 'badge-status badge-alert';
-            noticeGpu.className = 'notice-box';
-            noticeGpu.style.cssText = 'background:rgba(231,76,60,0.1); border-left:3px solid #e74c3c; color:#f5a9a1;';
-            noticeGpu.innerHTML = '<strong>Atenção:</strong> Seu navegador atual não possui suporte a WebGPU. Para utilizar este motor, utilize o <strong>Google Chrome 113+</strong> ou <strong>Microsoft Edge 113+</strong> em desktop com aceleração por hardware ativada.';
-            btnGpu.disabled = true;
-            btnGpu.title = 'WebGPU indisponível neste navegador';
-            btnGpu.innerHTML = '<span>✗ WebGPU Indisponível</span>';
-            return;
-        }
-
-        try {
-            const adapter = await navigator.gpu.requestAdapter();
-            if (adapter) {
-                gpuEl.textContent = 'Disponível';
-                gpuEl.className = 'badge-status badge-ready';
-                badgeGpu.textContent = 'Compatível (Pronto para Iniciar)';
-                badgeGpu.className = 'badge-status badge-ready';
-                
-                let adapterInfo = '';
-                if (adapter.info) {
-                    adapterInfo = (adapter.info.vendor || '') + ' ' + (adapter.info.architecture || '');
-                }
-                if (adapterInfo.trim()) {
-                    detailsEl.textContent += ' • WebGPU: ' + adapterInfo.trim();
-                }
-            } else {
-                throw new Error('Nenhum adaptador WebGPU aceito');
-            }
-        } catch (err) {
-            gpuEl.textContent = 'Sem Adaptador';
-            gpuEl.className = 'badge-status badge-alert';
-            badgeGpu.textContent = 'GPU Incompatível';
-            badgeGpu.className = 'badge-status badge-alert';
-            btnGpu.disabled = true;
-            btnGpu.innerHTML = '<span>✗ Sem Adaptador WebGPU</span>';
-            noticeGpu.innerHTML = '<strong>Atenção:</strong> A API WebGPU existe mas o hardware gráfico recusou o adaptador. Verifique os drivers de vídeo e a aceleração de hardware do navegador.';
+            const note = document.getElementById('engine-meta-note');
+            if (note) note.innerHTML += ' &bull; <span style="color:#8b9d94;">WebGPU não disponível neste browser</span>';
         }
     })();
     </script>
 </body>
 </html>
+
+
+
+
+
+
