@@ -728,6 +728,7 @@ async function refreshInstalledAssets() {
     const assetBadge = document.getElementById('assets-badge');
     const playBtn = document.getElementById('btn-play');
     const dockPlayBtn = document.getElementById('btn-dock-play');
+    const modalPlayBtn = document.getElementById('btn-modal-play');
 
     if (foundCount >= requiredCount && requiredCount > 0) {
         AppState.isGameReady = true;
@@ -735,23 +736,32 @@ async function refreshInstalledAssets() {
         assetBadge.className = 'status-badge badge-ready';
         if (playBtn) {
             playBtn.disabled = false;
-            playBtn.textContent = 'JOGAR CAPTALVO';
+            playBtn.textContent = 'JOGAR C&C GENERALS ZERO HOUR';
         }
         if (dockPlayBtn) {
             dockPlayBtn.disabled = false;
-            dockPlayBtn.textContent = '▶ JOGAR';
+            dockPlayBtn.textContent = '▶ JOGAR C&C GENERALS ZERO HOUR';
         }
+        if (modalPlayBtn) {
+            modalPlayBtn.style.display = 'block';
+            modalPlayBtn.textContent = '▶ JOGAR C&C GENERALS ZERO HOUR';
+        }
+    } else if (AppState.stagedBigFiles && AppState.stagedBigFiles.length > 0) {
+        validateStagedFolderChecklist(AppState.stagedBigFiles);
     } else {
         AppState.isGameReady = false;
         assetBadge.textContent = foundCount > 0 ? `${foundCount}/${requiredCount} essenciais` : 'Não importados';
         assetBadge.className = 'status-badge badge-missing';
         if (playBtn) {
             playBtn.disabled = false;
-            playBtn.textContent = 'IMPORTAR & JOGAR';
+            playBtn.textContent = 'SELECIONAR PASTA DO JOGO';
         }
         if (dockPlayBtn) {
             dockPlayBtn.disabled = false;
-            dockPlayBtn.textContent = '▶ IMPORTAR & JOGAR';
+            dockPlayBtn.textContent = '▶ SELECIONAR PASTA';
+        }
+        if (modalPlayBtn) {
+            modalPlayBtn.style.display = 'none';
         }
     }
 
@@ -762,22 +772,27 @@ function updateAssetListUI() {
     const list = document.getElementById('modal-asset-list');
     if (!list) return;
 
+    if (AppState.stagedBigFiles && AppState.stagedBigFiles.length > 0) {
+        validateStagedFolderChecklist(AppState.stagedBigFiles);
+        return;
+    }
+
     list.innerHTML = '';
     for (const item of REQUIRED_ASSETS) {
         const found = AppState.installedFiles.has(item.name) || AppState.installedFiles.has(item.name.toLowerCase());
         const div = document.createElement('div');
-        div.className = `asset-item ${found ? 'found' : 'missing'}`;
-        div.innerHTML = `<span>${item.name} <small>(${item.desc})</small></span><span>${found ? '✓ PRONTO' : '✗ PENDENTE'}</span>`;
+        div.className = `asset-item ${found ? 'found' : (item.required ? 'missing' : 'optional-missing')}`;
+        const tag = found ? '✓ PRONTO' : (item.required ? '✗ ESSENCIAL AUSENTE' : '– Opcional');
+        div.innerHTML = `<span>${item.name} <small>(${item.desc})</small></span><span>${tag}</span>`;
         list.appendChild(div);
     }
 }
 
 // -----------------------------------------------------------------------------
-// Folder & File Import Handlers
+// Folder & File Checklist & Inspection Handlers
 // -----------------------------------------------------------------------------
 async function handleDirectoryImport() {
     if (!window.showDirectoryPicker) {
-        // Fallback for browsers without showDirectoryPicker
         document.getElementById('file-input-fallback').click();
         return;
     }
@@ -793,56 +808,30 @@ async function handleDirectoryImport() {
         const progressDetail = document.getElementById('import-progress-detail');
 
         progressWrap.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressDetail.textContent = 'Varrendo diretório selecionado...';
+        progressBar.style.width = '30%';
+        progressDetail.textContent = 'Inspecionando diretório e verificando checklist de arquivos...';
 
         const foundBigFiles = [];
         await scanDirectoryForBigFiles(dirHandle, foundBigFiles);
 
+        progressWrap.style.display = 'none';
+
         if (foundBigFiles.length === 0) {
             alert('Nenhum arquivo .big foi encontrado na pasta selecionada.\nCertifique-se de selecionar a pasta onde o Command & Conquer Generals Zero Hour está instalado.');
-            progressWrap.style.display = 'none';
             return;
         }
 
-        // Copy files into OPFS assets directory
-        let copied = 0;
-        for (const item of foundBigFiles) {
-            progressDetail.textContent = `Importando ${item.name} (${(item.file.size / (1024 * 1024)).toFixed(1)} MB)...`;
-            
-            const targetHandle = await AppState.assetsDir.getFileHandle(item.name, { create: true });
-            const writable = await targetHandle.createWritable();
-            await item.file.stream().pipeTo(writable);
+        // Store staged files - DO NOT copy yet!
+        AppState.stagedFolderHandle = dirHandle;
+        AppState.stagedBigFiles = foundBigFiles;
 
-            // If Brazilian Portuguese edition, also provide English aliases for engine compatibility
-            const lower = item.name.toLowerCase();
-            if (lower === 'brazilianzh.big') {
-                const enHandle = await AppState.assetsDir.getFileHandle('EnglishZH.big', { create: true });
-                const enWritable = await enHandle.createWritable();
-                await (await targetHandle.getFile()).stream().pipeTo(enWritable);
-            } else if (lower === 'brazilian.big') {
-                const enHandle = await AppState.assetsDir.getFileHandle('English.big', { create: true });
-                const enWritable = await enHandle.createWritable();
-                await (await targetHandle.getFile()).stream().pipeTo(enWritable);
-            }
-
-            copied++;
-            const pct = Math.round((copied / foundBigFiles.length) * 100);
-            progressBar.style.width = `${pct}%`;
-        }
-
-        progressDetail.textContent = `Concluído! ${copied} arquivos importados com sucesso para o OPFS.`;
-        await refreshInstalledAssets();
-
-        setTimeout(() => {
-            progressWrap.style.display = 'none';
-            closeModal('modal-import');
-        }, 1200);
+        // Perform Checklist Validation
+        validateStagedFolderChecklist(foundBigFiles);
 
     } catch (err) {
         if (err.name !== 'AbortError') {
-            console.error('[Captalvo] Erro importando diretório:', err);
-            alert('Erro durante a importação: ' + err.message);
+            console.error('[Captalvo] Erro inspecionando diretório:', err);
+            alert('Erro durante a verificação da pasta: ' + err.message);
         }
         document.getElementById('import-progress-wrap').style.display = 'none';
     }
@@ -854,7 +843,6 @@ async function scanDirectoryForBigFiles(dirHandle, results) {
             const file = await handle.getFile();
             results.push({ name, file });
         } else if (handle.kind === 'directory') {
-            // Recurse into subdirectories (e.g., base Generals folder or Zero Hour folder)
             await scanDirectoryForBigFiles(handle, results);
         }
     }
@@ -862,43 +850,122 @@ async function scanDirectoryForBigFiles(dirHandle, results) {
 
 async function handleFileInputFallback(files) {
     if (!files || files.length === 0) return;
-
-    const progressWrap = document.getElementById('import-progress-wrap');
-    const progressBar = document.getElementById('import-progress-bar');
-    const progressDetail = document.getElementById('import-progress-detail');
-
-    progressWrap.style.display = 'block';
-
-    let copied = 0;
     const bigFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.big'));
-
     if (bigFiles.length === 0) {
         alert('Nenhum arquivo .big selecionado.');
-        progressWrap.style.display = 'none';
         return;
     }
+    const foundBigFiles = bigFiles.map(file => ({ name: file.name, file }));
+    AppState.stagedBigFiles = foundBigFiles;
+    validateStagedFolderChecklist(foundBigFiles);
+}
 
-    for (const file of bigFiles) {
-        progressDetail.textContent = `Importando ${file.name}...`;
-        const targetHandle = await AppState.assetsDir.getFileHandle(file.name, { create: true });
-        const writable = await targetHandle.createWritable();
-        await file.stream().pipeTo(writable);
-
-        copied++;
-        progressBar.style.width = `${Math.round((copied / bigFiles.length) * 100)}%`;
+function validateStagedFolderChecklist(foundBigFiles) {
+    const stagedMap = new Map();
+    for (const item of foundBigFiles) {
+        stagedMap.set(item.name.toLowerCase(), item);
     }
 
-    progressDetail.textContent = `Concluído! ${copied} arquivos importados.`;
-    await refreshInstalledAssets();
+    let foundEssential = 0;
+    let totalEssential = 0;
 
-    setTimeout(() => {
-        progressWrap.style.display = 'none';
-        closeModal('modal-import');
-    }, 1200);
+    for (const item of REQUIRED_ASSETS) {
+        if (item.required) {
+            totalEssential++;
+            const lower = item.name.toLowerCase();
+            const altLower = item.alt ? item.alt.toLowerCase() : null;
+            if (stagedMap.has(lower) || (altLower && stagedMap.has(altLower)) || AppState.installedFiles.has(item.name) || AppState.installedFiles.has(lower)) {
+                foundEssential++;
+            }
+        }
+    }
+
+    // Render Checklist UI
+    const list = document.getElementById('modal-asset-list');
+    if (list) {
+        list.innerHTML = '';
+        for (const item of REQUIRED_ASSETS) {
+            const lower = item.name.toLowerCase();
+            const altLower = item.alt ? item.alt.toLowerCase() : null;
+            const staged = stagedMap.get(lower) || (altLower ? stagedMap.get(altLower) : null);
+            const inOPFS = AppState.installedFiles.has(item.name) || AppState.installedFiles.has(lower);
+
+            const div = document.createElement('div');
+            if (staged) {
+                const mb = (staged.file.size / (1024 * 1024)).toFixed(1);
+                div.className = 'asset-item found-staged';
+                div.innerHTML = `<span><strong>${item.name}</strong> <small>(${item.desc})</small></span><span style="color:var(--accent-gold); font-weight:700;">✓ NA PASTA (${mb} MB)</span>`;
+            } else if (inOPFS) {
+                div.className = 'asset-item found';
+                div.innerHTML = `<span><strong>${item.name}</strong> <small>(${item.desc})</small></span><span style="color:#2ecc71; font-weight:700;">✓ NO NAVEGADOR</span>`;
+            } else {
+                div.className = `asset-item ${item.required ? 'missing' : 'optional-missing'}`;
+                const tag = item.required ? '✗ ESSENCIAL AUSENTE' : '– Opcional';
+                div.innerHTML = `<span>${item.name} <small>(${item.desc})</small></span><span style="color:var(--muted);">${tag}</span>`;
+            }
+            list.appendChild(div);
+        }
+    }
+
+    const banner = document.getElementById('folder-checklist-banner');
+    const bTitle = document.getElementById('folder-checklist-title');
+    const bSub = document.getElementById('folder-checklist-subtitle');
+    const bStatus = document.getElementById('folder-checklist-status');
+    const modalPlayBtn = document.getElementById('btn-modal-play');
+    const playBtn = document.getElementById('btn-play');
+    const dockPlayBtn = document.getElementById('btn-dock-play');
+    const assetBadge = document.getElementById('assets-badge');
+
+    if (banner) banner.style.display = 'block';
+
+    const allEssentialFound = (foundEssential >= totalEssential && totalEssential > 0);
+
+    if (allEssentialFound) {
+        AppState.isGameReady = true;
+        if (bTitle) bTitle.textContent = `Checklist Validado: ${foundBigFiles.length} arquivos .BIG encontrados`;
+        if (bSub) bSub.textContent = `Todos os ${totalEssential} arquivos essenciais foram conferidos com sucesso. Clique em jogar para iniciar o carregamento.`;
+        if (bStatus) {
+            bStatus.textContent = 'PRONTO PARA JOGAR';
+            bStatus.className = 'status-badge badge-ready';
+        }
+        if (assetBadge) {
+            assetBadge.textContent = `${foundEssential}/${totalEssential} essenciais validados`;
+            assetBadge.className = 'status-badge badge-ready';
+        }
+        if (modalPlayBtn) {
+            modalPlayBtn.style.display = 'block';
+            modalPlayBtn.textContent = '▶ JOGAR C&C GENERALS ZERO HOUR';
+        }
+        if (playBtn) {
+            playBtn.disabled = false;
+            playBtn.textContent = 'JOGAR C&C GENERALS ZERO HOUR';
+        }
+        if (dockPlayBtn) {
+            dockPlayBtn.disabled = false;
+            dockPlayBtn.textContent = '▶ JOGAR C&C GENERALS ZERO HOUR';
+        }
+    } else {
+        AppState.isGameReady = false;
+        if (bTitle) bTitle.textContent = `Checklist Incompleto: ${foundEssential}/${totalEssential} essenciais identificados`;
+        if (bSub) bSub.textContent = `Faltam arquivos essenciais na pasta selecionada. Verifique se selecionou a pasta raiz da instalação.`;
+        if (bStatus) {
+            bStatus.textContent = 'INCOMPLETO';
+            bStatus.className = 'status-badge badge-missing';
+        }
+        if (modalPlayBtn) modalPlayBtn.style.display = 'none';
+        if (playBtn) {
+            playBtn.disabled = false;
+            playBtn.textContent = 'SELECIONAR PASTA DO JOGO';
+        }
+        if (dockPlayBtn) {
+            dockPlayBtn.disabled = false;
+            dockPlayBtn.textContent = '▶ SELECIONAR PASTA';
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
-// Engine Launch Coordinator
+// Engine Launch Coordinator with Fullscreen Cinematic Intro & Real Loading HUD
 // -----------------------------------------------------------------------------
 async function startGame() {
     if (!AppState.isGameReady) {
@@ -906,45 +973,189 @@ async function startGame() {
         return;
     }
 
-    const progressContainer = document.getElementById('progress-container');
-    const progressFill = document.getElementById('main-progress-fill');
-    const progressDetail = document.getElementById('main-progress-detail');
-    const progressStatus = document.getElementById('main-progress-status');
+    closeModal('modal-import');
+    await launchWithCinematicIntro();
+}
 
-    progressContainer.style.display = 'block';
-    progressFill.style.width = '10%';
-    progressStatus.textContent = 'PREPARANDO PONTE DE ARQUIVOS (RAM & OPFS)';
-    progressDetail.textContent = 'Verificando integridade e montando cache...';
+async function launchWithCinematicIntro() {
+    const overlay = document.getElementById('intro-video-overlay');
+    const video = document.getElementById('intro-video');
+    const hudStatus = document.getElementById('intro-loading-status');
+    const hudDetail = document.getElementById('intro-loading-detail');
+    const hudFill = document.getElementById('intro-loading-fill');
+    const hudPct = document.getElementById('intro-loading-pct');
+    const hudTimer = document.getElementById('intro-video-time');
+    const btnSkip = document.getElementById('btn-skip-intro');
 
-    // 1. Prepare assets in RAM bridge before WASM initializes
+    // 1. Show Video Overlay Fullscreen
+    if (overlay) overlay.style.display = 'flex';
+    if (btnSkip) btnSkip.style.display = 'none';
+
+    // 2. Configure & Play Video (Audio ON, No Controls, No Pause)
+    if (video) {
+        video.muted = false;
+        video.volume = 1.0;
+        video.controls = false;
+        video.loop = false;
+        video.currentTime = 0;
+
+        try {
+            await video.play();
+        } catch (e) {
+            console.warn('[Captalvo] Tentando play novamente no vídeo:', e);
+            try {
+                video.muted = false;
+                await video.play();
+            } catch (err2) {
+                console.warn('[Captalvo] Falha ao iniciar vídeo:', err2);
+            }
+        }
+    }
+
+    let isGameReadyToLaunch = false;
+    let isIntroFinished = false;
+    let gameLaunched = false;
+
+    function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function doActualGameStart() {
+        if (gameLaunched) return;
+        gameLaunched = true;
+
+        if (video) {
+            try { video.pause(); } catch (e) {}
+        }
+        if (overlay) overlay.style.display = 'none';
+
+        // Reveal game container & focus canvas
+        const homeMain = document.getElementById('home-main');
+        if (homeMain) homeMain.style.display = 'none';
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) gameContainer.style.display = 'flex';
+        const escapeBar = document.getElementById('game-escape-bar');
+        if (escapeBar) escapeBar.style.display = 'flex';
+        const canvas = document.getElementById('canvas');
+        if (canvas) canvas.focus();
+
+        AppState.isGameRunning = true;
+    }
+
+    // Video timer & end listener
+    if (video) {
+        video.ontimeupdate = () => {
+            const cur = video.currentTime || 0;
+            const dur = video.duration || 71;
+            if (hudTimer) {
+                hudTimer.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+            }
+
+            // Check if video reached its end (1m11s = 71 seconds)
+            if (cur >= dur - 0.25 || video.ended) {
+                if (!isIntroFinished) {
+                    isIntroFinished = true;
+                    video.pause(); // Freeze on last frame, DO NOT LOOP
+                    if (isGameReadyToLaunch) {
+                        doActualGameStart();
+                    }
+                }
+            }
+        };
+
+        video.onended = () => {
+            isIntroFinished = true;
+            video.pause(); // Freeze on last frame
+            if (isGameReadyToLaunch) {
+                doActualGameStart();
+            }
+        };
+    }
+
+    if (btnSkip) {
+        btnSkip.onclick = () => {
+            if (isGameReadyToLaunch) {
+                doActualGameStart();
+            }
+        };
+    }
+
+    function updateHUD(status, pct, detail) {
+        if (hudStatus && status) hudStatus.textContent = status;
+        if (hudPct) hudPct.textContent = `${pct}%`;
+        if (hudFill) hudFill.style.width = `${pct}%`;
+        if (hudDetail && detail) hudDetail.textContent = detail;
+    }
+
+    updateHUD('INICIALIZANDO MOTOR C&C GENERALS ZERO HOUR', 5, 'Preparando sistema de arquivos...');
+
+    // 3. Step A: Stream staged files into OPFS if any
+    if (AppState.stagedBigFiles && AppState.stagedBigFiles.length > 0) {
+        const filesToCopy = AppState.stagedBigFiles;
+        let copied = 0;
+        updateHUD('IMPORTANDO DADOS DO ZERO HOUR', 8, `Copiando ${filesToCopy.length} arquivos para o armazenamento local...`);
+
+        for (const item of filesToCopy) {
+            const mb = (item.file.size / (1024 * 1024)).toFixed(1);
+            const pct = 8 + Math.round((copied / filesToCopy.length) * 32);
+            updateHUD('IMPORTANDO DADOS DO ZERO HOUR', pct, `Gravando ${item.name} (${mb} MB)...`);
+
+            try {
+                const targetHandle = await AppState.assetsDir.getFileHandle(item.name, { create: true });
+                const writable = await targetHandle.createWritable();
+                await item.file.stream().pipeTo(writable);
+
+                const lower = item.name.toLowerCase();
+                if (lower === 'brazilianzh.big') {
+                    const enHandle = await AppState.assetsDir.getFileHandle('EnglishZH.big', { create: true });
+                    const enWritable = await enHandle.createWritable();
+                    await (await targetHandle.getFile()).stream().pipeTo(enWritable);
+                } else if (lower === 'brazilian.big') {
+                    const enHandle = await AppState.assetsDir.getFileHandle('English.big', { create: true });
+                    const enWritable = await enHandle.createWritable();
+                    await (await targetHandle.getFile()).stream().pipeTo(enWritable);
+                }
+            } catch (copyErr) {
+                console.warn(`[Captalvo] Erro ao gravar ${item.name}:`, copyErr);
+            }
+
+            copied++;
+        }
+
+        AppState.stagedBigFiles = null;
+        await refreshInstalledAssets();
+    }
+
+    // 4. Step B: RAM Preload via CaptalvoAssetBridge
+    updateHUD('PREPARANDO PONTE DE MEMÓRIA RAM', 42, 'Verificando integridade e indexando arquivos...');
+
     if (window.CaptalvoAssetBridge) {
         const modeSelect = document.getElementById('select-storage-mode');
         const storageMode = (modeSelect && modeSelect.value) || 'automatic';
+
         try {
             await window.CaptalvoAssetBridge.prepareAssetsForLaunch(storageMode, (label, pct) => {
-                progressDetail.textContent = label;
-                progressFill.style.width = `${pct}%`;
+                const globalPct = 42 + Math.round((pct / 100) * 48); // 42% -> 90%
+                updateHUD('CARREGANDO RECURSOS NA RAM', globalPct, label);
             });
         } catch (bridgeErr) {
-            console.error('[Captalvo] Erro na ponte de ativos:', bridgeErr.stack || bridgeErr.message || bridgeErr);
+            console.error('[Captalvo] Erro na ponte de ativos:', bridgeErr);
             alert('Falha ao preparar arquivos do jogo: ' + (bridgeErr.message || bridgeErr));
-            progressContainer.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
             return;
         }
     }
 
-    progressStatus.textContent = 'INICIALIZANDO MOTOR WEBASSEMBLY';
-    progressDetail.textContent = 'Carregando binários do Zero Hour...';
+    updateHUD('INICIALIZANDO MOTOR WEBASSEMBLY', 92, 'Carregando binários do Zero Hour...');
 
-    // Helper function to inject CSF string table into Emscripten FS
+    // 5. Step C: Configure Module & execute GeneralsZH.js
     function injectCSFTable(fsInstance, reason) {
         if (!fsInstance || !window.CaptalvoAssetBridge) return false;
         try {
             const csfData = window.CaptalvoAssetBridge.getCSFData();
-            if (!csfData || csfData.length === 0) {
-                console.warn('[Captalvo] Tabela CSF não encontrada na memória para injeção (' + reason + ').');
-                return false;
-            }
+            if (!csfData || csfData.length === 0) return false;
 
             const dirs = ['data', 'data/english', 'Data', 'Data/English', 'assets', 'assets/data', 'assets/data/english', 'assets/Data', 'assets/Data/English'];
             for (const d of dirs) {
@@ -965,30 +1176,16 @@ async function startGame() {
                     fsInstance.createDataFile(dir, file, csfData, true, true, true);
                 } catch (e) {}
             }
-
-            console.log(`[Captalvo] generals.csf (${csfData.length} bytes) montado no Emscripten FS via ${reason}.`);
             return true;
         } catch (err) {
-            console.warn(`[Captalvo] Aviso ao injetar CSF (${reason}):`, err);
             return false;
         }
     }
 
-    // Configure Emscripten Module
     window.Module = {
         canvas: document.getElementById('canvas'),
         preRun: [
             function(mod) {
-                console.log('[Captalvo] Executando preRun da engine...');
-                const homeMain = document.getElementById('home-main');
-                if (homeMain) homeMain.style.display = 'none';
-                const gameContainer = document.getElementById('game-container');
-                if (gameContainer) gameContainer.style.display = 'flex';
-                const canvas = document.getElementById('canvas');
-                if (canvas) {
-                    canvas.focus();
-                    canvas.addEventListener('mousedown', () => canvas.focus());
-                }
                 const theFS = (mod && mod.FS) || (window.Module && window.Module.FS);
                 injectCSFTable(theFS, 'preRun');
             }
@@ -1008,59 +1205,23 @@ async function startGame() {
             const theFS = window.Module && window.Module.FS;
             injectCSFTable(theFS, 'onRuntimeInitialized');
             if (TelemetryManager) TelemetryManager.log('info', 'lifecycle', 'Runtime WASM inicializado com sucesso');
-            progressFill.style.width = '100%';
-            progressStatus.textContent = 'PRONTO';
-            progressDetail.textContent = 'Iniciando simulação...';
 
-            const homeMain = document.getElementById('home-main');
-            if (homeMain) homeMain.style.display = 'none';
-            const gameContainer = document.getElementById('game-container');
-            if (gameContainer) gameContainer.style.display = 'flex';
-            const escapeBar = document.getElementById('game-escape-bar');
-            if (escapeBar) escapeBar.style.display = 'flex';
-            const canvas = document.getElementById('canvas');
-            if (canvas) canvas.focus();
-            AppState.isGameRunning = true;
-        },
-        setStatus: (text) => {
-            if (text) {
-                progressDetail.textContent = text;
-                const m = text.match(/\((\d+)\/(\d+)\)/);
-                if (m) {
-                    const pct = Math.round((parseInt(m[1]) / parseInt(m[2])) * 100);
-                    progressFill.style.width = `${pct}%`;
-                }
+            updateHUD('CARREGAMENTO CONCLUÍDO', 100, 'Motor pronto. Entrando na simulação...');
+            isGameReadyToLaunch = true;
+
+            // If the video already finished (or is past 71s), launch immediately!
+            if (isIntroFinished) {
+                doActualGameStart();
+            } else {
+                // Video is still playing: reveal Skip Intro button!
+                if (btnSkip) btnSkip.style.display = 'block';
             }
         },
         onAbort: (err) => {
             console.error('[Captalvo] Abort:', err);
             if (TelemetryManager) TelemetryManager.log('fatal', 'wasm_abort', String(err));
             alert('O motor de jogo foi abortado: ' + err);
-            progressContainer.style.display = 'none';
-        }
-    };
-
-    // Global GeneralsX Progress callback if supported
-    window.GeneralsX = window.GeneralsX || {};
-    window.GeneralsX.setProgress = (stage, cur, tot, label) => {
-        if (tot > 0) {
-            const pct = Math.round((cur / tot) * 100);
-            progressFill.style.width = `${pct}%`;
-        }
-        if (label) {
-            progressDetail.textContent = label;
-        }
-        if (stage === 'ready') {
-            document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
-            syncModalState();
-            const homeMain = document.getElementById('home-main');
-            if (homeMain) homeMain.style.display = 'none';
-            const gameContainer = document.getElementById('game-container');
-            if (gameContainer) gameContainer.style.display = 'flex';
-            const gameEscapeBar = document.getElementById('game-escape-bar');
-            if (gameEscapeBar) gameEscapeBar.style.display = 'flex';
-            if (window.CaptalvoHomeSim) window.CaptalvoHomeSim.pause();
-            AppState.isGameRunning = true;
+            if (overlay) overlay.style.display = 'none';
         }
     };
 
@@ -1073,7 +1234,7 @@ async function startGame() {
     } catch (e) {
         console.error('[Captalvo] Erro carregando script do motor:', e);
         alert('Falha ao carregar o script do motor: ' + e.message);
-        progressContainer.style.display = 'none';
+        if (overlay) overlay.style.display = 'none';
     }
 }
 
@@ -1443,6 +1604,16 @@ function setupUIEventListeners() {
     }
 
     document.getElementById('btn-play').addEventListener('click', startGame);
+    const btnModalPlay = document.getElementById('btn-modal-play');
+    if (btnModalPlay) {
+        btnModalPlay.addEventListener('click', startGame);
+    }
+    window.addEventListener('keydown', (e) => {
+        const overlay = document.getElementById('intro-video-overlay');
+        if (overlay && overlay.style.display !== 'none' && (e.code === 'Space' || e.key === ' ')) {
+            e.preventDefault();
+        }
+    });
     document.getElementById('btn-import-assets').addEventListener('click', () => openModal('modal-import'));
     document.getElementById('btn-settings').addEventListener('click', () => openModal('modal-settings'));
     document.getElementById('btn-info').addEventListener('click', () => openModal('modal-info'));

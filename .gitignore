@@ -11,6 +11,8 @@ assets/
 public/assets/
 *.map
 *.MAP
+*.mp4
+*.MP4
 
 # Environment & Credentials
 .env

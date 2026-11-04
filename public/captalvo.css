@@ -1451,3 +1451,148 @@ body:has(.modal-overlay.active) #home-main footer {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ==============================================================================
+   CINEMATIC INTRO & REAL LOADING HUD (Zero Hour 1080p Intro Synchronization)
+   ============================================================================== */
+#intro-video-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+}
+
+#intro-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  pointer-events: none;
+}
+
+.intro-hud-overlay {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(840px, 92vw);
+  background: rgba(7, 10, 9, 0.88);
+  border: 1px solid rgba(229, 169, 59, 0.45);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.95), 0 0 24px rgba(229, 169, 59, 0.15);
+  padding: 16px 22px;
+  border-radius: 6px;
+  z-index: 1510;
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.intro-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.intro-hud-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.intro-hud-tag {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--accent-gold);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.intro-hud-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.intro-hud-pct {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--accent-gold);
+}
+
+.intro-progress-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.intro-hud-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.intro-hud-detail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 75%;
+  color: #e0e0e0;
+}
+
+.intro-hud-timer {
+  color: var(--accent-gold);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.btn-skip-intro {
+  position: absolute;
+  top: 36px;
+  right: 36px;
+  z-index: 1520;
+  background: rgba(229, 169, 59, 0.92);
+  color: #070a09;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 12px 26px;
+  border: 1px solid #ffd37a;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 0 20px rgba(229, 169, 59, 0.6);
+  transition: all 0.2s ease;
+  animation: skipIntroPulse 1.2s infinite alternate;
+}
+
+.btn-skip-intro:hover {
+  background: #ffd37a;
+  transform: scale(1.05);
+}
+
+@keyframes skipIntroPulse {
+  0% { transform: scale(1); box-shadow: 0 0 15px rgba(229, 169, 59, 0.5); }
+  100% { transform: scale(1.03); box-shadow: 0 0 25px rgba(229, 169, 59, 0.85); }
+}
+
+.asset-item.found-staged {
+  border-left: 3px solid var(--accent-gold);
+}

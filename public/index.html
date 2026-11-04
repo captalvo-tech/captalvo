@@ -132,9 +132,37 @@
     })();
     </script>
 
-    <link rel="stylesheet" href="captalvo.css?t=1793763689">
+    <link rel="stylesheet" href="captalvo.css?t=1793764655">
 </head>
 <body>
+
+    <!-- Fullscreen Cinematic Intro & Real Loading HUD Overlay -->
+    <div id="intro-video-overlay" style="display:none;">
+        <video id="intro-video" src="Command-Conquer-Generals-Zero-Hour-Intro-1080p.mp4" playsinline preload="auto"></video>
+        
+        <!-- HUD de Carregamento Sobreposto -->
+        <div id="intro-loading-hud" class="intro-hud-overlay">
+            <div class="intro-hud-header">
+                <div class="intro-hud-brand">
+                    <span class="intro-hud-tag">SISTEMA MILITAR GLOBAL &bull; C&amp;C GENERALS</span>
+                    <h3 id="intro-loading-status" class="intro-hud-title">INICIALIZANDO ZERO HOUR</h3>
+                </div>
+                <div id="intro-loading-pct" class="intro-hud-pct">0%</div>
+            </div>
+            <div class="progress-track intro-progress-track">
+                <div id="intro-loading-fill" class="progress-fill"></div>
+            </div>
+            <div class="intro-hud-footer">
+                <span id="intro-loading-detail" class="intro-hud-detail">Preparando arquivos do jogo...</span>
+                <span id="intro-video-time" class="intro-hud-timer">00:00 / 01:11</span>
+            </div>
+        </div>
+
+        <!-- Botão Pular Introdução (Aparece somente quando o jogo estiver 100% carregado) -->
+        <button id="btn-skip-intro" class="btn-skip-intro" type="button" style="display:none;">
+            Pular Introdução ▶
+        </button>
+    </div>
 
     <!-- WebGL Game Canvas Container -->
     <div id="game-container" style="display:none;">
@@ -178,7 +206,7 @@
                 <!-- Quick Dock com atalhos diretos -->
                 <div id="home-quick-dock" class="quick-dock hidden">
                     <button id="btn-dock-play" class="dock-pill btn-primary" type="button">
-                        ▶ JOGAR
+                        ▶ JOGAR C&amp;C GENERALS ZERO HOUR
                     </button>
                     <button id="btn-dock-files" class="dock-pill" type="button">
                         📁 ARQUIVOS DO JOGO
@@ -253,7 +281,7 @@
                 <!-- Action Buttons -->
                 <div class="action-buttons">
                     <button id="btn-play" class="btn-primary" type="button" disabled>
-                        JOGAR CAPTALVO
+                        JOGAR C&amp;C GENERALS ZERO HOUR
                     </button>
                     <button id="btn-open-game-files" class="btn-secondary" style="border-color:var(--accent-gold); color:var(--accent-gold);" type="button">
                         📁 Gerenciador de Arquivos do Jogo (.BIG)
@@ -336,10 +364,25 @@
                     <div class="progress-track">
                         <div id="import-progress-bar" class="progress-fill"></div>
                     </div>
-                    <div id="import-progress-detail" class="progress-detail">Processando arquivos...</div>
+                    <div id="import-progress-detail" class="progress-detail">Inspecionando arquivos...</div>
                 </div>
 
-                <h4>Status dos Arquivos no Navegador</h4>
+                <!-- Checklist Banner da Pasta Selecionada -->
+                <div id="folder-checklist-banner" style="display:none; margin-bottom: 14px; padding: 12px 14px; background: rgba(229, 169, 59, 0.12); border: 1px solid rgba(229, 169, 59, 0.4); border-radius: 4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span id="folder-checklist-title" style="font-weight:700; color:var(--accent-gold); font-size:13px;">Checklist da Pasta: 0 arquivos</span>
+                        <span id="folder-checklist-status" class="status-badge badge-ready">Validado</span>
+                    </div>
+                    <div id="folder-checklist-subtitle" style="font-size:11px; color:var(--muted); margin-top:4px;">
+                        Arquivos identificados na pasta e prontos para inicialização.
+                    </div>
+                </div>
+
+                <button id="btn-modal-play" class="btn-primary" style="display:none; width:100%; font-size:14px; padding:14px; margin-bottom:14px;" type="button">
+                    ▶ JOGAR C&amp;C GENERALS ZERO HOUR
+                </button>
+
+                <h4>Checklist dos Arquivos</h4>
                 <div id="modal-asset-list" class="asset-list">
                     <!-- Populated dynamically -->
                 </div>
@@ -965,14 +1008,14 @@
     </div>
 
     <!-- Captalvo Interactive Simulation Script -->
-    <script src="captalvo-cache.js?t=1793763689"></script>
-    <script src="captalvo-asset-manager.js?t=1793763689"></script>
-    <script src="captalvo-diagnostics.js?t=1793763689"></script>
-    <script src="captalvo-asset-bridge.js?t=1793763689"></script>
-    <script src="captalvo-home-sim.js?t=1793763689"></script>
+    <script src="captalvo-cache.js?t=1793764655"></script>
+    <script src="captalvo-asset-manager.js?t=1793764655"></script>
+    <script src="captalvo-diagnostics.js?t=1793764655"></script>
+    <script src="captalvo-asset-bridge.js?t=1793764655"></script>
+    <script src="captalvo-home-sim.js?t=1793764655"></script>
 
     <!-- Captalvo Application Script -->
-    <script src="captalvo-app.js?t=1793763689"></script>
+    <script src="captalvo-app.js?t=1793764655"></script>
 </body>
 </html>
 
