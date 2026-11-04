@@ -55,3 +55,12 @@ if (fs.existsSync(webgpuHtmlPath)) {
     fs.writeFileSync(webgpuHtmlPath, html, 'utf8');
     console.log(`Updated public/webgpu/index.html with timestamp t=${ts}.`);
 }
+
+// 3. Update Scorpion index.html
+const scorpionHtmlPath = path.resolve(__dirname, '../public/scorpion/index.html');
+if (fs.existsSync(scorpionHtmlPath)) {
+    let html = fs.readFileSync(scorpionHtmlPath, 'utf8');
+    html = html.replace(/(src|href)="(\/scorpion\/assets\/[^"?]+)(\?[^"]*)?"/g, `$1="$2?t=${ts}"`);
+    fs.writeFileSync(scorpionHtmlPath, html, 'utf8');
+    console.log(`Updated public/scorpion/index.html with timestamp t=${ts}.`);
+}

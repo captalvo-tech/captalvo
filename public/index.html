@@ -132,7 +132,7 @@
     })();
     </script>
 
-    <link rel="stylesheet" href="captalvo.css?t=1793803745">
+    <link rel="stylesheet" href="captalvo.css?t=1793809740">
 </head>
 <body>
 
@@ -209,7 +209,10 @@
                         ▶ JOGAR WEBGL 2.0
                     </a>
                     <a href="/webgpu/" class="dock-pill" style="text-decoration:none; display:inline-flex; align-items:center; border-color:#00d9ff; color:#00d9ff;">
-                        ⚡ JOGAR WEBGPU
+                        ⚡ ORIGAMI PURO
+                    </a>
+                    <a href="/scorpion/" class="dock-pill" style="text-decoration:none; display:inline-flex; align-items:center; border-color:#ffaa00; color:#ffaa00; font-weight:700;">
+                        🛠️ PROJETO SCORPION
                     </a>
                     <button id="btn-dock-files" class="dock-pill" type="button">
                         📁 ARQUIVOS DO JOGO
@@ -308,15 +311,30 @@
                         <!-- Engine 2: WebGPU Origami -->
                         <div style="background:rgba(0,217,255,0.08); border:1px solid rgba(0,217,255,0.35); border-radius:8px; padding:14px; text-align:left;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <strong style="color:#00d9ff; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Motor WebGPU (Origami)</strong>
-                                <span class="status-badge badge-info" style="font-size:10px;">Nova Engine</span>
+                                <strong style="color:#00d9ff; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Motor WebGPU (Origami Puro)</strong>
+                                <span class="status-badge badge-info" style="font-size:10px;">Referência Intacta</span>
                             </div>
                             <p style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.4;">
-                                Implementação baseada em GeneralsX (origami-ltd commit 46382a3). Heap de 2 GiB e shaders DXVK.
+                                Implementação pura baseada em GeneralsX (origami-ltd). Sem alterações. Requer pasta completa no disco.
                                 <br><small style="color:#00d9ff;">⚡ Requer navegador com suporte a WebGPU (Chrome 113+, Edge 113+).</small>
                             </p>
                             <a href="/webgpu/" class="btn-primary" style="display:block; text-align:center; text-decoration:none; padding:10px 14px; font-size:12px; font-weight:700; background:linear-gradient(135deg,#00d9ff,#0099cc); color:#020b12;">
-                                ⚡ INICIAR WEBGPU (ORIGAMI)
+                                ⚡ INICIAR ORIGAMI PURO
+                            </a>
+                        </div>
+
+                        <!-- Engine 3: Projeto Scorpion (WebGPU com Auto-Reparo Cloud) -->
+                        <div style="background:rgba(255,170,0,0.08); border:1px solid rgba(255,170,0,0.4); border-radius:8px; padding:14px; text-align:left;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <strong style="color:#ffaa00; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Projeto Scorpion (Auto-Reparo Cloud)</strong>
+                                <span class="status-badge" style="font-size:10px; background:rgba(255,170,0,0.2); color:#ffaa00; border:1px solid rgba(255,170,0,0.4); font-weight:700;">RECOMENDADO</span>
+                            </div>
+                            <p style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.4;">
+                                Engine WebGPU com verificação inteligente e auto-reparo. Se faltar arquivos no seu computador, o Scorpion transmite ou baixa os arquivos faltantes direto do acervo do servidor (<code style="color:#ffaa00;">/Zero-Hour-Files</code>).
+                                <br><small style="color:#ffaa00;">🛠️ Verificação automática, reparo para o disco ou streaming imediato em nuvem.</small>
+                            </p>
+                            <a href="/scorpion/" class="btn-primary" style="display:block; text-align:center; text-decoration:none; padding:10px 14px; font-size:12px; font-weight:700; background:linear-gradient(135deg,#ffaa00,#ff8800); color:#020b12; border:none; box-shadow:0 0 12px rgba(255,170,0,0.3);">
+                                🛠️ INICIAR PROJETO SCORPION
                             </a>
                         </div>
                     </div>
@@ -1045,14 +1063,14 @@
     </div>
 
     <!-- Captalvo Interactive Simulation Script -->
-    <script src="captalvo-cache.js?t=1793803745"></script>
-    <script src="captalvo-asset-manager.js?t=1793803745"></script>
-    <script src="captalvo-diagnostics.js?t=1793803745"></script>
-    <script src="captalvo-asset-bridge.js?t=1793803745"></script>
-    <script src="captalvo-home-sim.js?t=1793803745"></script>
+    <script src="captalvo-cache.js?t=1793809740"></script>
+    <script src="captalvo-asset-manager.js?t=1793809740"></script>
+    <script src="captalvo-diagnostics.js?t=1793809740"></script>
+    <script src="captalvo-asset-bridge.js?t=1793809740"></script>
+    <script src="captalvo-home-sim.js?t=1793809740"></script>
 
     <!-- Captalvo Application Script -->
-    <script src="captalvo-app.js?t=1793803745"></script>
+    <script src="captalvo-app.js?t=1793809740"></script>
 
     <!-- Safe Non-blocking WebGPU Capability Indicator -->
     <script>

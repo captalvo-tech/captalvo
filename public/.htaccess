@@ -56,13 +56,20 @@ DirectoryIndex index.html index.php
     # Block access to hidden/sensitive files
     RewriteRule ^(\.git|\.env|\.htaccess|.*\.ini|.*\.sql|.*\.bak) - [F,L]
 
-    # Route Origami WebGPU helper endpoints
-    RewriteRule ^(webgpu/)?GeneralsXAssets/?$ api/index.php?endpoint=GeneralsXAssets [L,QSA]
-    RewriteRule ^(webgpu/)?GeneralsXLog/?$ api/index.php?endpoint=GeneralsXLog [L,QSA]
-    RewriteRule ^(webgpu/)?GeneralsXShare/?$ api/index.php?endpoint=GeneralsXShare [L,QSA]
+    # Route WebGPU helper endpoints (Origami & Scorpion)
+    RewriteRule ^(webgpu|scorpion)/?GeneralsXAssets/?$ api/index.php?endpoint=GeneralsXAssets [L,QSA]
+    RewriteRule ^(webgpu|scorpion)/?GeneralsXLog/?$ api/index.php?endpoint=GeneralsXLog [L,QSA]
+    RewriteRule ^(webgpu|scorpion)/?GeneralsXShare/?$ api/index.php?endpoint=GeneralsXShare [L,QSA]
+
+    # Route /api/repair to /api/repair.php
+    RewriteRule ^api/repair/?$ api/repair.php [L,QSA]
 
     # Route /api/health to /api/health.php
     RewriteRule ^api/health/?$ api/health.php [L,QSA]
+
+    # Scorpion binary asset fallback to webgpu if not present
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^scorpion/GeneralsXZH\.(wasm|data|js)$ webgpu/GeneralsXZH.$1 [L]
 
     # Route /api/* requests to /api/index.php
     RewriteCond %{REQUEST_FILENAME} !-f
