@@ -67,6 +67,9 @@ DirectoryIndex index.html index.php
     # Route /api/health to /api/health.php
     RewriteRule ^api/health/?$ api/health.php [L,QSA]
 
+    # Route /api/big-armada to /api/big-armada.php
+    RewriteRule ^api/big-armada/?$ api/big-armada.php [L,QSA]
+
     # Scorpion binary asset fallback to webgpu if not present
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^scorpion/GeneralsXZH\.(wasm|data|js)$ webgpu/GeneralsXZH.$1 [L]

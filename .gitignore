@@ -49,4 +49,5 @@ dist/
 build/
 
 storage_last_session.json
+app/storage/
 

@@ -64,9 +64,9 @@ $applyCmd = @"
 tar -xzf /home/$HostUser/staging_captalvo/captalvo_app.tar.gz -C '$RemoteDomainPath/app/'
 tar -xzf /home/$HostUser/staging_captalvo/captalvo_public.tar.gz -C '$RemoteDomainPath/public_html/'
 rm -rf /home/$HostUser/staging_captalvo
-mkdir -p '$RemoteDomainPath/app/storage/logs/sessions'
+mkdir -p '$RemoteDomainPath/app/storage/logs/sessions' '$RemoteDomainPath/app/storage/big-armada'
 chmod 775 '$RemoteDomainPath/app/storage'
-chmod -R 775 '$RemoteDomainPath/app/storage/logs'
+chmod -R 775 '$RemoteDomainPath/app/storage/logs' '$RemoteDomainPath/app/storage/big-armada'
 chmod 755 '$RemoteDomainPath/public_html'
 find '$RemoteDomainPath/public_html' -type f -exec chmod 644 {} +
 find '$RemoteDomainPath/public_html' -type d -exec chmod 755 {} +
@@ -90,5 +90,11 @@ Write-Host "    Status HTTP captalvo.online: $httpStatus" -ForegroundColor Green
 $headers = curl.exe -ILs https://captalvo.online
 $cacheHeader = ($headers | Select-String -Pattern "cache-control" -CaseSensitive:$false)
 Write-Host "    Header Cache-Control: $cacheHeader" -ForegroundColor Yellow
+
+$bigArmadaStatus = (curl.exe -s -o /dev/null -w "%{http_code}" https://captalvo.online/big-armada/)
+Write-Host "    Status HTTP captalvo.online/big-armada/: $bigArmadaStatus" -ForegroundColor Green
+
+$bigArmadaApi = curl.exe -s "https://captalvo.online/api/big-armada.php?action=state"
+Write-Host "    Resposta /api/big-armada.php (resumo): $($bigArmadaApi.Substring(0, [Math]::Min(120, $bigArmadaApi.Length)))..." -ForegroundColor Cyan
 
 Write-Host "==> [Deploy Concluído] Captalvo Alpha está no ar em https://captalvo.online!" -ForegroundColor Green

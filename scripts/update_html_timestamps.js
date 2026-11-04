@@ -64,3 +64,23 @@ if (fs.existsSync(scorpionHtmlPath)) {
     fs.writeFileSync(scorpionHtmlPath, html, 'utf8');
     console.log(`Updated public/scorpion/index.html with timestamp t=${ts}.`);
 }
+
+// 4. Update Big Armada index.html
+const bigArmadaHtmlPath = path.resolve(__dirname, '../public/big-armada/index.html');
+if (fs.existsSync(bigArmadaHtmlPath)) {
+    let html = fs.readFileSync(bigArmadaHtmlPath, 'utf8');
+    const baFiles = [
+        'css/big-armada.css',
+        'js/s2_client.js',
+        'js/terrain_engine.js',
+        'js/rts_renderer.js',
+        'js/big-armada-client.js'
+    ];
+    for (const f of baFiles) {
+        const escaped = f.replace(/\./g, '\\.').replace(/\//g, '\\/');
+        const reg = new RegExp(`(src|href)="${escaped}(\\?[^"]*)?"`, 'g');
+        html = html.replace(reg, `$1="${f}?t=${ts}"`);
+    }
+    fs.writeFileSync(bigArmadaHtmlPath, html, 'utf8');
+    console.log(`Updated public/big-armada/index.html with timestamp t=${ts}.`);
+}
