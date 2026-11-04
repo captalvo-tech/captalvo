@@ -117,28 +117,40 @@
     </div>
 
     <!-- Scorpion Mission Launch Banner (Zero-Wait Briefing) -->
-    <div id="scorpion-launcher-card" style="position:fixed; top:75px; left:50%; transform:translateX(-50%); z-index:99999; width:min(700px, 94vw); background:rgba(2,11,18,0.96); border:1px solid #00d9ff; box-shadow:0 0 40px rgba(0,217,255,0.3); border-radius:8px; padding:22px 26px; font-family:ui-monospace, monospace; backdrop-filter:blur(10px); text-align:center;">
+    <div id="scorpion-launcher-card" style="position:fixed; top:75px; left:50%; transform:translateX(-50%); z-index:99999; width:min(740px, 95vw); background:rgba(2,11,18,0.96); border:1px solid #00d9ff; box-shadow:0 0 40px rgba(0,217,255,0.3); border-radius:8px; padding:22px 26px; font-family:ui-monospace, monospace; backdrop-filter:blur(10px); text-align:center;">
         <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,217,255,0.12); color:#00d9ff; border:1px solid rgba(0,217,255,0.3); border-radius:4px; padding:4px 10px; font-size:11px; font-weight:700; margin-bottom:12px;">
             ⚡ PROJETO SCORPION &bull; WEBGPU DUAL-STREAMING
         </div>
-        <h1 style="margin:0 0 8px 0; font-size:20px; font-weight:800; color:#fff; letter-spacing:0.5px;">
+        <h1 style="margin:0 0 8px 0; font-size:22px; font-weight:800; color:#fff; letter-spacing:0.5px;">
             COMMAND &amp; CONQUER: GENERALS ZERO HOUR
         </h1>
-        <p style="margin:0 0 18px 0; font-size:12px; color:#88a0b0; line-height:1.5;">
-            O motor executará o carregamento e pré-carregamento completo em segundo plano enquanto você assiste à introdução oficial de <strong>1m11s</strong>.
-            <br>Ao término do vídeo em alta definição com áudio, o jogo já estará aberto e rodando no menu principal sem necessidade de novos cliques.
+        <p style="margin:0 0 16px 0; font-size:12px; color:#88a0b0; line-height:1.5;">
+            Selecione a pasta dos seus arquivos locais para verificar o checklist antes de carregar. Arquivos ausentes serão auto-reparados via streaming da nuvem durante o briefing cinematográfico de <strong>1m11s</strong>.
         </p>
+
+        <!-- Folder Checklist Container -->
+        <div id="scorpion-checklist-wrap" style="display:none; background:rgba(0,4,8,0.7); border:1px solid rgba(0,217,255,0.3); border-radius:6px; padding:12px 14px; margin-bottom:16px; text-align:left;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(0,217,255,0.2); padding-bottom:6px;">
+                <span id="sc-checklist-summary" style="font-size:12px; font-weight:700; color:#00d9ff;">
+                    ✓ Checklist de Arquivos
+                </span>
+                <span id="sc-checklist-badge" class="sc-badge sc-badge-cyan">0/33 no disco</span>
+            </div>
+            <div id="sc-checklist-items" style="max-height:160px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:6px; font-size:11px; padding-right:4px;">
+                <!-- Dinamicamente preenchido -->
+            </div>
+        </div>
         
         <div style="display:flex; flex-direction:column; gap:10px;">
-            <button id="btn-scorpion-play-intro" class="sc-btn sc-btn-primary" style="font-size:14px; font-weight:800; padding:14px; justify-content:center; letter-spacing:0.5px; box-shadow:0 0 15px rgba(0,217,255,0.5);">
-                ▶ JOGAR ZERO HOUR &bull; ASSISTIR INTRODUÇÃO (1m11s)
+            <button id="btn-scorpion-play-intro" class="sc-btn sc-btn-primary" style="font-size:14px; font-weight:800; padding:15px; justify-content:center; letter-spacing:0.5px; box-shadow:0 0 20px rgba(0,217,255,0.5); background:linear-gradient(135deg, #00d9ff 0%, #00ff88 100%); color:#020b12;">
+                ▶ JOGAR C&amp;C GENERALS ZERO HOUR
             </button>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button id="btn-scorpion-pick-folder" class="sc-btn" style="flex:1; justify-content:center;" title="Selecionar a pasta com os arquivos locais">
+                <button id="btn-scorpion-pick-folder" class="sc-btn" style="flex:1; justify-content:center;" title="Selecionar a pasta com os arquivos locais para checklist">
                     📁 Selecionar Pasta Local (.BIG)
                 </button>
                 <button id="btn-scorpion-open-repair-card" class="sc-btn" style="flex:1; justify-content:center; border-color:#ffaa00; color:#ffaa00;" title="Verificar integridade dos arquivos">
-                    🛠️ Reparar / Verificar Arquivos
+                    🛠️ Auditoria / Reparar Arquivos
                 </button>
             </div>
         </div>
@@ -239,34 +251,191 @@
         </div>
     </div>
 
-    <!-- Script de Inicialização e Conexão do Briefing Tático (1m11s) -->
+    <!-- Script de Inicialização e Conexão do Briefing Tático (1m11s) com Checklist Pré-Carregamento -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const btnPlay = document.getElementById('btn-scorpion-play-intro');
             const btnPick = document.getElementById('btn-scorpion-pick-folder');
             const btnRepair = document.getElementById('btn-scorpion-open-repair-card');
             const launcherCard = document.getElementById('scorpion-launcher-card');
+            const checklistWrap = document.getElementById('scorpion-checklist-wrap');
+            const checklistSummary = document.getElementById('sc-checklist-summary');
+            const checklistBadge = document.getElementById('sc-checklist-badge');
+            const checklistItems = document.getElementById('sc-checklist-items');
 
+            const ESSENTIAL_FILES = [
+                { name: 'INI.big', desc: 'Regras e dados principais' },
+                { name: 'INIZH.big', desc: 'Regras Zero Hour' },
+                { name: 'Window.big', desc: 'Interface e Menus' },
+                { name: 'WindowZH.big', desc: 'Interface Zero Hour' },
+                { name: 'EnglishZH.big', alt: 'BrazilianZH.big', desc: 'Textos e legendas CSF' },
+                { name: 'Generals.big', desc: 'Base Generals' },
+                { name: 'Textures.big', desc: 'Texturas da interface' },
+                { name: 'TexturesZH.big', desc: 'Texturas Zero Hour' },
+                { name: 'Audio.big', desc: 'Áudio do menu' },
+                { name: 'AudioZH.big', desc: 'Efeitos sonoros ZH' },
+                { name: 'Speech.big', desc: 'Falas de comando' },
+                { name: 'SpeechZH.big', desc: 'Vozes Zero Hour' },
+                { name: 'W3D.big', desc: 'Modelos 3D' },
+                { name: 'W3DZH.big', desc: 'Unidades Zero Hour' },
+                { name: 'Maps.big', desc: 'Mapas táticos' },
+                { name: 'MapsZH.big', desc: 'Mapas Zero Hour' },
+                { name: 'Terrain.big', desc: 'Texturas de terreno' },
+                { name: 'TerrainZH.big', desc: 'Terrenos Zero Hour' }
+            ];
+
+            function openScorpionDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open('captalvo_scorpion', 1);
+                    req.onupgradeneeded = () => {
+                        if (!req.result.objectStoreNames.contains('directories')) {
+                            req.result.createObjectStore('directories');
+                        }
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function renderChecklist(localFilesMap) {
+                if (!checklistWrap || !checklistItems) return;
+                checklistWrap.style.display = 'block';
+                checklistItems.innerHTML = '';
+
+                let foundCount = 0;
+                let totalCount = ESSENTIAL_FILES.length;
+
+                for (const item of ESSENTIAL_FILES) {
+                    const lower = item.name.toLowerCase();
+                    const altLower = item.alt ? item.alt.toLowerCase() : null;
+                    const found = localFilesMap.has(lower) || (altLower && localFilesMap.has(altLower));
+
+                    const div = document.createElement('div');
+                    div.style.cssText = `
+                        padding: 4px 6px;
+                        background: ${found ? 'rgba(0, 255, 136, 0.08)' : 'rgba(255, 170, 0, 0.08)'};
+                        border: 1px solid ${found ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 170, 0, 0.3)'};
+                        border-radius: 4px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    `;
+
+                    if (found) {
+                        foundCount++;
+                        const fileInfo = localFilesMap.get(lower) || localFilesMap.get(altLower);
+                        const mb = fileInfo && fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(1) : '?';
+                        div.innerHTML = `
+                            <span style="color:#fff; font-weight:700;">${item.name}</span>
+                            <span style="color:#00ff88; font-size:10px; font-weight:800;">✓ NO DISCO (${mb}MB)</span>
+                        `;
+                    } else {
+                        div.innerHTML = `
+                            <span style="color:#aaa;">${item.name}</span>
+                            <span style="color:#ffaa00; font-size:10px; font-weight:700;">⚡ CLOUD STREAM</span>
+                        `;
+                    }
+                    checklistItems.appendChild(div);
+                }
+
+                if (checklistBadge) {
+                    checklistBadge.textContent = `${foundCount}/${totalCount} no disco`;
+                    checklistBadge.className = foundCount === totalCount ? 'sc-badge sc-badge-cyan' : 'sc-badge sc-badge-amber';
+                }
+
+                if (checklistSummary) {
+                    if (foundCount === totalCount) {
+                        checklistSummary.textContent = `✓ Checklist Validado: Todos os ${totalCount} arquivos essenciais estão no disco!`;
+                        checklistSummary.style.color = '#00ff88';
+                    } else {
+                        const missing = totalCount - foundCount;
+                        checklistSummary.textContent = `✓ Checklist Concluído: ${foundCount} no disco • ${missing} serão auto-reparados via nuvem!`;
+                        checklistSummary.style.color = '#00d9ff';
+                    }
+                }
+
+                if (btnPlay) {
+                    btnPlay.textContent = '▶ JOGAR C&C GENERALS ZERO HOUR';
+                    btnPlay.style.background = 'linear-gradient(135deg, #00d9ff 0%, #00ff88 100%)';
+                }
+            }
+
+            async function scanAndChecklist(dirHandle) {
+                if (!dirHandle) return;
+                const localMap = new Map();
+                try {
+                    for await (const [name, entry] of dirHandle.entries()) {
+                        if (entry.kind === 'file' && name.toLowerCase().endsWith('.big')) {
+                            const file = await entry.getFile();
+                            localMap.set(name.toLowerCase(), { name, size: file.size, file });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[ScorpionChecklist] Erro ao ler pasta:', e);
+                }
+                renderChecklist(localMap);
+            }
+
+            // Auto-check saved handle on page load
+            try {
+                const db = await openScorpionDB();
+                const tx = db.transaction('directories', 'readonly');
+                const req = tx.objectStore('directories').get('GeneralsZH');
+                req.onsuccess = () => {
+                    if (req.result) {
+                        scanAndChecklist(req.result);
+                    }
+                };
+            } catch (e) {}
+
+            // Folder pick button -> performs checklist BEFORE loading!
+            if (btnPick) {
+                btnPick.addEventListener('click', async () => {
+                    try {
+                        if (!window.showDirectoryPicker) {
+                            alert('Seu navegador não suporta a File System Access API. Utilize o Google Chrome, Edge ou Brave.');
+                            return;
+                        }
+                        const handle = await window.showDirectoryPicker({
+                            id: 'captalvo-zh-folder',
+                            mode: 'read'
+                        });
+
+                        // Store handle in IndexedDB captalvo_scorpion for both GeneralsZH & Generals
+                        const db = await openScorpionDB();
+                        const tx = db.transaction('directories', 'readwrite');
+                        const store = tx.objectStore('directories');
+                        store.put(handle, 'GeneralsZH');
+                        store.put(handle, 'Generals');
+                        await new Promise(r => tx.oncomplete = r);
+
+                        // Scan and perform checklist
+                        await scanAndChecklist(handle);
+
+                    } catch (err) {
+                        if (err.name !== 'AbortError') {
+                            console.error('[Scorpion] Erro selecionando pasta:', err);
+                            alert('Erro ao selecionar pasta: ' + err.message);
+                        }
+                    }
+                });
+            }
+
+            // Play button -> Starts intro video and boots engine in sequence without needing another play click!
             if (btnPlay) {
                 btnPlay.addEventListener('click', () => {
                     if (launcherCard) launcherCard.style.display = 'none';
                     if (window.ScorpionIntroManager) {
                         window.ScorpionIntroManager.playIntroAndBoot(() => {
-                            // Trigger underlying folder pick or boot
-                            const firstrunPick = document.getElementById('pick');
-                            if (firstrunPick) {
-                                firstrunPick.click();
+                            // Signal engine to start loading & playing automatically
+                            if (typeof window.__scorpionStartGame === 'function') {
+                                window.__scorpionStartGame();
+                            } else {
+                                window.__scorpionAutoPlayRequested = true;
+                                const firstrunPick = document.getElementById('pick');
+                                if (firstrunPick) firstrunPick.click();
                             }
                         });
-                    }
-                });
-            }
-
-            if (btnPick) {
-                btnPick.addEventListener('click', () => {
-                    const firstrunPick = document.getElementById('pick');
-                    if (firstrunPick) {
-                        firstrunPick.click();
                     }
                 });
             }
@@ -275,6 +444,26 @@
                 btnRepair.addEventListener('click', () => {
                     if (window.CaptalvoScorpionRepair) {
                         window.CaptalvoScorpionRepair.openModal();
+                    }
+                });
+            }
+
+            const btnPlayCloud = document.getElementById('btn-scorpion-play-cloud');
+            if (btnPlayCloud) {
+                btnPlayCloud.addEventListener('click', () => {
+                    const repairModal = document.getElementById('modal-scorpion-repair');
+                    if (repairModal) repairModal.style.display = 'none';
+                    if (launcherCard) launcherCard.style.display = 'none';
+                    if (window.ScorpionIntroManager) {
+                        window.ScorpionIntroManager.playIntroAndBoot(() => {
+                            if (typeof window.__scorpionStartGame === 'function') {
+                                window.__scorpionStartGame();
+                            } else {
+                                window.__scorpionAutoPlayRequested = true;
+                                const firstrunPick = document.getElementById('pick');
+                                if (firstrunPick) firstrunPick.click();
+                            }
+                        });
                     }
                 });
             }

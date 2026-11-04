@@ -88,6 +88,16 @@ window.__scorpionGetDirHandle = () => H;
 
 js = js.replace(oldY, newY);
 
+// 4b. Hook real-time progress reporter rt()
+const oldRt = 's=(r,o="",i)=>{r&&(t.textContent=r),e.textContent=o,n.hidden=i===void 0,i!==void 0&&(a.style.width=`${Math.round(Math.min(1,Math.max(0,i))*100)}%`)};';
+const newRt = 's=(r,o="",i)=>{r&&(t.textContent=r),e.textContent=o,n.hidden=i===void 0,i!==void 0&&(a.style.width=`${Math.round(Math.min(1,Math.max(0,i))*100)}%`);if(typeof window!=="undefined"&&window.__scorpionOnProgress){window.__scorpionOnProgress(r,o,i);}};';
+
+if (!js.includes(oldRt)) {
+    console.error('ERROR: oldRt not found in js!');
+    process.exit(1);
+}
+js = js.replace(oldRt, newRt);
+
 // 5. Hook yt(t) for real-time progress and MainMenu completion
 const ytIdx = js.indexOf('function yt(t){');
 if (ytIdx === -1) {
@@ -114,19 +124,48 @@ const newYt = `function yt(t){
   const e=/initSubsystem\\('([^']+)'\\)/.exec(t);
   if(e){
     $("Starting engine",\`initialising \${e[1]}\`);
-    if(typeof window !== 'undefined' && window.__scorpionSetEngineStatus){
-      window.__scorpionSetEngineStatus(\`Inicializando subsistema: \${e[1]}\`);
+    if(typeof window !== 'undefined' && window.__scorpionOnEngineSubsystem){
+      window.__scorpionOnEngineSubsystem(e[1]);
     }
   } else if(t.startsWith("[INI] load(")){
     const iniName = t.slice(11,t.indexOf(")"));
     $("Starting engine",\`reading \${iniName}\`);
-    if(typeof window !== 'undefined' && window.__scorpionSetEngineStatus){
-      window.__scorpionSetEngineStatus(\`Lendo configuração: \${iniName}\`);
+    if(typeof window !== 'undefined' && window.__scorpionOnEngineIni){
+      window.__scorpionOnEngineIni(iniName);
     }
   }
 }`;
 
 js = js.replace(oldYt, newYt);
+
+// 5b. Hook Q (Play button) to support seamless automatic start
+const oldPlayHook = 'Q.hidden=!1;$("Ready","Runtime downloaded, let\'s Skirmish");Q.addEventListener("click",()=>{Q.hidden=!0,$("Starting engine","loading game data"),ye=Y({request:!0}).catch(()=>[]),Le($e),setInterval(ke,1e3)},{once:!0});';
+const newPlayHook = `
+Q.hidden=!1;
+$("Ready","Runtime downloaded, let's Skirmish");
+const startScorpionGame = () => {
+  if (typeof window !== "undefined" && window.__scorpionGameStarted) return;
+  if (typeof window !== "undefined") window.__scorpionGameStarted = true;
+  Q.hidden = !0;
+  $("Starting engine", "loading game data");
+  ye = Y({request: !0}).catch(() => []);
+  Le($e);
+  setInterval(ke, 1e3);
+};
+if (typeof window !== "undefined") {
+  window.__scorpionStartGame = startScorpionGame;
+  if (window.__scorpionAutoPlayRequested) {
+    setTimeout(startScorpionGame, 100);
+  }
+}
+Q.addEventListener("click", startScorpionGame, {once: !0});
+`;
+
+if (!js.includes(oldPlayHook)) {
+    console.error('ERROR: oldPlayHook not found in js!');
+    process.exit(1);
+}
+js = js.replace(oldPlayHook, newPlayHook);
 
 // 6. Expose global audio muting hook
 js = js.replace(
