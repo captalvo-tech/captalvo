@@ -5,6 +5,12 @@
 
 ---
 
+## 📚 Documentação e Handoff
+- **Guia Rápido & Handoff para Desenvolvedores:** Consulte [HANDOFF.md](HANDOFF.md).
+- **Repositório Privado de Engenharia:** Documentações avançadas, relatórios de crash e planejamento em [captalvo-tech/captalvo-source](https://github.com/captalvo-tech/captalvo-source).
+
+---
+
 ## 🌐 Produção
 
 - **URL Oficial:** [https://captalvo.online](https://captalvo.online)
