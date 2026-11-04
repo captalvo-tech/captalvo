@@ -17,7 +17,8 @@ async function main() {
         { name: 'Captalvo Adaptive Cache (LRU, Modes, Thrashing)', file: './cache.test.js' },
         { name: 'Captalvo Asset Bridge (Synchronous Range, Fallbacks)', file: './bridge.test.js' },
         { name: 'Captalvo Asset Manager (WebCrypto, OPFS Chunks, BIGF)', file: './storage.test.js' },
-        { name: 'Captalvo Diagnostics & Telemetry (LGPD, Freezes, AutoFlush)', file: './telemetry.test.js' }
+        { name: 'Captalvo Diagnostics & Telemetry (LGPD, Freezes, AutoFlush)', file: './telemetry.test.js' },
+        { name: 'Captalvo Mouse & Viewport (Resolution, Projection, Hit-Test)', file: './mouse_viewport.test.js' }
     ];
 
     for (const suite of suites) {

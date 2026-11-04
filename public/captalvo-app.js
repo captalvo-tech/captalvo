@@ -965,6 +965,58 @@ function validateStagedFolderChecklist(foundBigFiles) {
 }
 
 // -----------------------------------------------------------------------------
+// Global Target Resolution & Canvas Sizing Enforcement (800x600 4:3 Engine Layout)
+// -----------------------------------------------------------------------------
+window.CaptalvoTargetWidth = 800;
+window.CaptalvoTargetHeight = 600;
+window.CaptalvoDPR = 1;
+
+function enforceCanvasResolution() {
+    const cv = document.getElementById('canvas');
+    if (cv) {
+        if (cv.width !== 800) cv.width = 800;
+        if (cv.height !== 600) cv.height = 600;
+    }
+}
+enforceCanvasResolution();
+if (typeof ResizeObserver !== 'undefined') {
+    try {
+        const cv = document.getElementById('canvas');
+        if (cv) new ResizeObserver(enforceCanvasResolution).observe(cv);
+    } catch (e) {}
+}
+setInterval(enforceCanvasResolution, 1000);
+
+// Focus resilience guard: ensures canvas retains focus across pointer events & tab switching
+function installFocusGuard() {
+    if (window._captalvoFocusGuardInstalled) return;
+    window._captalvoFocusGuardInstalled = true;
+    const refocus = () => {
+        const cv = document.getElementById('canvas');
+        if (!cv) return;
+        const ae = document.activeElement;
+        if (!ae || ae === document.body || ae === cv) {
+            try { cv.focus({ preventScroll: true }); } catch (e) {}
+        }
+    };
+    window.addEventListener('focus', () => setTimeout(refocus, 10));
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) setTimeout(refocus, 10);
+    });
+    window.addEventListener('pointerdown', refocus, { capture: true });
+    refocus();
+}
+
+// Global modal cleanup: guarantees no invisible .modal-overlay.active blocks canvas clicks
+function dismissAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    });
+    document.body.classList.remove('modal-open');
+}
+
+// -----------------------------------------------------------------------------
 // Engine Launch Coordinator with Fullscreen Cinematic Intro & Real Loading HUD
 // -----------------------------------------------------------------------------
 async function startGame() {
@@ -973,11 +1025,12 @@ async function startGame() {
         return;
     }
 
-    closeModal('modal-import');
+    dismissAllModals();
     await launchWithCinematicIntro();
 }
 
 async function launchWithCinematicIntro() {
+    dismissAllModals();
     const overlay = document.getElementById('intro-video-overlay');
     const video = document.getElementById('intro-video');
     const hudStatus = document.getElementById('intro-loading-status');
@@ -1026,6 +1079,10 @@ async function launchWithCinematicIntro() {
         if (gameLaunched) return;
         gameLaunched = true;
 
+        dismissAllModals();
+        enforceCanvasResolution();
+        installFocusGuard();
+
         if (video) {
             try { video.pause(); } catch (e) {}
         }
@@ -1039,7 +1096,10 @@ async function launchWithCinematicIntro() {
         const escapeBar = document.getElementById('game-escape-bar');
         if (escapeBar) escapeBar.style.display = 'flex';
         const canvas = document.getElementById('canvas');
-        if (canvas) canvas.focus();
+        if (canvas) {
+            enforceCanvasResolution();
+            canvas.focus({ preventScroll: true });
+        }
 
         AppState.isGameRunning = true;
     }
@@ -2580,10 +2640,37 @@ const DevConsole = {
                 this.copyToClipboard();
                 break;
 
-            case 'status':
-                const fps = document.getElementById('game-fps-counter').textContent;
-                this.write(`STATUS: JogoRodando=${AppState.isGameRunning} | FPS=${fps} | OPFS=${AppState.installedFiles.size} arquivos | Backend=${AppState.backendHealthy ? 'Online' : 'Falha'}`, 'log-ok');
+            case 'status': {
+                const fps = document.getElementById('game-fps-counter') ? document.getElementById('game-fps-counter').textContent : '--';
+                const canvas = document.getElementById('canvas');
+                const cr = canvas ? canvas.getBoundingClientRect() : { width: 0, height: 0, left: 0, top: 0 };
+                const diag = window.CaptalvoMouseDiag ? window.CaptalvoMouseDiag.getDiagnosticsSummary() : null;
+                const lastClick = diag && diag.lastClick ? JSON.stringify(diag.lastClick) : 'Nenhum clique registrado';
+                this.write(`STATUS DO MOTOR:
+  JogoRodando=${AppState.isGameRunning} | FPS=${fps} | Backend=${AppState.backendHealthy ? 'Online' : 'Falha'}
+  Canvas Buffer: ${canvas ? canvas.width + 'x' + canvas.height : 'N/A'} (Alvo: 800x600 Fixo 4:3)
+  Canvas CSS Rect: ${cr.width.toFixed(1)}x${cr.height.toFixed(1)} (Pos: left=${cr.left.toFixed(1)}, top=${cr.top.toFixed(1)})
+  DPR da Tela: ${window.devicePixelRatio || 1}
+  Último Clique Mouse: ${lastClick}`, 'log-ok');
                 break;
+            }
+
+            case 'mouse':
+            case 'mousedebug': {
+                if (!window.CaptalvoMouseDiag) {
+                    this.write('CaptalvoMouseDiag não inicializado.', 'log-err');
+                    break;
+                }
+                const summary = window.CaptalvoMouseDiag.getDiagnosticsSummary();
+                this.write(`DIAGNÓSTICO DE MOUSE & VIEWPORT:
+  Buffer Canvas: ${summary.canvasBuffer}
+  Dimensão Visual CSS: ${summary.canvasCssRect}
+  Device Pixel Ratio: ${summary.devicePixelRatio}
+  Resolução Lógica do Motor: ${summary.targetResolution}
+  Total de Cliques: ${summary.totalClicks}
+  Último Clique: ${summary.lastClick ? JSON.stringify(summary.lastClick, null, 2) : 'Ainda nenhum clique no canvas'}`, 'log-ok');
+                break;
+            }
 
             case 'diag':
                 this.write('Executando diagnóstico do sistema...', 'log-warn');

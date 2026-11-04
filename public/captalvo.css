@@ -397,7 +397,7 @@ footer a:hover {
   align-items: center;
   justify-content: center;
   background: #000;
-  z-index: 1000;
+  z-index: 5000;
 }
 
 canvas#canvas {
@@ -409,6 +409,11 @@ canvas#canvas {
   max-height: 100%;
   background: #000;
   outline: none;
+  image-rendering: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
 }
 
 /* Floating escape bar in game */
@@ -417,7 +422,7 @@ canvas#canvas {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1010;
+  z-index: 5010;
   background: rgba(7, 10, 9, 0.88);
   border: 1px solid var(--border-color);
   backdrop-filter: blur(8px);
@@ -1461,7 +1466,7 @@ body:has(.modal-overlay.active) #home-main footer {
   width: 100vw;
   height: 100vh;
   background: #000;
-  z-index: 1500;
+  z-index: 8000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1490,7 +1495,7 @@ body:has(.modal-overlay.active) #home-main footer {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.95), 0 0 24px rgba(229, 169, 59, 0.15);
   padding: 16px 22px;
   border-radius: 6px;
-  z-index: 1510;
+  z-index: 8010;
   backdrop-filter: blur(10px);
   pointer-events: auto;
 }

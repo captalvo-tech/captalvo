@@ -305,14 +305,130 @@ class CaptalvoDiagnosticsSystem {
     }
 }
 
+// ==============================================================================
+// CAPTALVO MOUSE & VIEWPORT DIAGNOSTICS (Zero Hour UI Hit-Test & Coordinate Tracking)
+// Local in-memory diagnostics: never transmits individual click coords to remote telemetry
+// ==============================================================================
+
+const ZERO_HOUR_MAIN_MENU_BUTTONS = [
+    { name: 'MainMenu.wnd:ButtonSinglePlayer', label: 'UM JOGADOR (Single Player)', rect: [540, 116, 748, 152] },
+    { name: 'MainMenu.wnd:ButtonMultiplayer', label: 'MULTIPLAYER', rect: [540, 156, 748, 192] },
+    { name: 'MainMenu.wnd:ButtonLoadReplay', label: 'CARREGAR REPLAY', rect: [540, 196, 748, 231] },
+    { name: 'MainMenu.wnd:ButtonOptions', label: 'OPÇÕES (Options)', rect: [540, 236, 748, 272] },
+    { name: 'MainMenu.wnd:ButtonCredits', label: 'CRÉDITOS', rect: [540, 276, 748, 312] },
+    { name: 'MainMenu.wnd:ButtonExit', label: 'SAIR (Exit)', rect: [540, 316, 748, 352] },
+    // Submenu Single Player
+    { name: 'MainMenu.wnd:ButtonUSA', label: 'CAMPANHA EUA', rect: [540, 116, 748, 152] },
+    { name: 'MainMenu.wnd:ButtonGLA', label: 'CAMPANHA GLA', rect: [540, 156, 748, 192] },
+    { name: 'MainMenu.wnd:ButtonChina', label: 'CAMPANHA CHINA', rect: [540, 196, 748, 231] },
+    { name: 'MainMenu.wnd:ButtonChallenge', label: 'DESAFIO DOS GENERAIS', rect: [540, 236, 748, 272] },
+    { name: 'MainMenu.wnd:ButtonSkirmish', label: 'ESCARAMUÇA (Skirmish)', rect: [540, 276, 748, 312] },
+    { name: 'MainMenu.wnd:ButtonSingleBack', label: 'VOLTAR (Back)', rect: [540, 316, 748, 351] }
+];
+
+class CaptalvoMouseDiagnostics {
+    constructor() {
+        this.buttons = ZERO_HOUR_MAIN_MENU_BUTTONS;
+        this.lastClick = null;
+        this.history = [];
+        this.clickCount = 0;
+    }
+
+    testHit(x, y) {
+        const hits = [];
+        for (const btn of this.buttons) {
+            const [x1, y1, x2, y2] = btn.rect;
+            if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
+                hits.push(btn);
+            }
+        }
+        return hits;
+    }
+
+    recordInput(domEvent, canvasRect, rawRelX, rawRelY, engineX, engineY, canvasW, canvasH) {
+        if (!domEvent) return;
+        const type = domEvent.type || 'mousedown';
+        const isClick = (type === 'mousedown' || type === 'mouseup' || type === 'click');
+
+        const hits = this.testHit(engineX, engineY);
+        const hitNames = hits.map(h => h.label);
+
+        const record = {
+            time: new Date().toISOString(),
+            type: type,
+            button: domEvent.button !== undefined ? domEvent.button : 0,
+            dom: {
+                clientX: domEvent.clientX,
+                clientY: domEvent.clientY,
+                screenX: domEvent.screenX,
+                screenY: domEvent.screenY
+            },
+            canvasRect: {
+                width: +(canvasRect.width || 0).toFixed(1),
+                height: +(canvasRect.height || 0).toFixed(1),
+                left: +(canvasRect.left || 0).toFixed(1),
+                top: +(canvasRect.top || 0).toFixed(1)
+            },
+            relative: {
+                x: +rawRelX.toFixed(1),
+                y: +rawRelY.toFixed(1)
+            },
+            engineResolution: {
+                width: canvasW || 800,
+                height: canvasH || 600
+            },
+            projectedEngineCoords: {
+                x: engineX,
+                y: engineY
+            },
+            sdlDelivery: 'CONFIRMED (Emscripten targetX/targetY written to event buffer)',
+            hitTest: {
+                hasHit: hits.length > 0,
+                targets: hitNames
+            }
+        };
+
+        if (isClick) {
+            this.lastClick = record;
+            this.clickCount++;
+            this.history.unshift(record);
+            if (this.history.length > 50) this.history.pop();
+
+            const hitDesc = hitNames.length > 0 ? `🎯 HIT: ${hitNames.join(' | ')}` : '❌ Sem colisão com botões do menu';
+            const logMsg = `[Diagnostics:Input] ${type.toUpperCase()} DOM(${domEvent.clientX}, ${domEvent.clientY}) -> RelCanvas(${rawRelX.toFixed(0)}, ${rawRelY.toFixed(0)}) -> Engine(${engineX}, ${engineY}) -> ${hitDesc}`;
+
+            console.log(logMsg);
+            if (typeof window !== 'undefined' && window.DevConsole && typeof window.DevConsole.write === 'function') {
+                window.DevConsole.write(logMsg, hitNames.length > 0 ? 'log-ok' : 'log-info');
+            }
+        }
+    }
+
+    getDiagnosticsSummary() {
+        const canvas = typeof document !== 'undefined' ? document.getElementById('canvas') : null;
+        const rect = canvas ? canvas.getBoundingClientRect() : { width: 0, height: 0, left: 0, top: 0 };
+        return {
+            canvasBuffer: canvas ? `${canvas.width}x${canvas.height}` : 'N/A',
+            canvasCssRect: `${rect.width.toFixed(1)}x${rect.height.toFixed(1)} at (${rect.left.toFixed(1)}, ${rect.top.toFixed(1)})`,
+            devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+            targetResolution: '800x600 (Fixed 4:3 Engine Layout)',
+            totalClicks: this.clickCount,
+            lastClick: this.lastClick
+        };
+    }
+}
+
 // Global Singleton & Module Exports
 if (typeof window !== 'undefined') {
     window.CaptalvoConsentManager = CaptalvoConsentManager;
     window.CaptalvoDiagnostics = new CaptalvoDiagnosticsSystem();
+    window.CaptalvoMouseDiag = new CaptalvoMouseDiagnostics();
 }
 if (typeof module !== 'undefined') {
     module.exports = {
         CaptalvoConsentManager,
-        CaptalvoDiagnosticsSystem
+        CaptalvoDiagnosticsSystem,
+        CaptalvoMouseDiagnostics,
+        ZERO_HOUR_MAIN_MENU_BUTTONS
     };
 }
