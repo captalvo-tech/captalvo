@@ -991,20 +991,23 @@ setInterval(enforceCanvasResolution, 1000);
 function installFocusGuard() {
     if (window._captalvoFocusGuardInstalled) return;
     window._captalvoFocusGuardInstalled = true;
-    const refocus = () => {
+    const refocus = (e) => {
         const cv = document.getElementById('canvas');
-        if (!cv) return;
-        const ae = document.activeElement;
-        if (!ae || ae === document.body || ae === cv) {
-            try { cv.focus({ preventScroll: true }); } catch (e) {}
+        if (!cv || !AppState.isGameRunning) return;
+        if (e && e.target && e.target.closest && (e.target.closest('.modal-overlay') || e.target.closest('#game-escape-bar') || e.target.closest('#afterburner-osd'))) {
+            return;
         }
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || (ae.closest && (ae.closest('.modal-overlay') || ae.closest('#game-escape-bar'))))) {
+            return;
+        }
+        try { cv.focus({ preventScroll: true }); } catch (err) {}
     };
-    window.addEventListener('focus', () => setTimeout(refocus, 10));
+    window.addEventListener('focus', () => setTimeout(refocus, 20));
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) setTimeout(refocus, 10);
+        if (!document.hidden) setTimeout(refocus, 20);
     });
     window.addEventListener('pointerdown', refocus, { capture: true });
-    refocus();
 }
 
 // Global modal cleanup: guarantees no invisible .modal-overlay.active blocks canvas clicks
@@ -1081,24 +1084,13 @@ async function launchWithCinematicIntro() {
     }
 
     
-function installFocusGuard() {
-    if (window._captalvoFocusGuardInstalled) return;
-    window._captalvoFocusGuardInstalled = true;
-    const refocus = () => {
-        const cv = document.getElementById("canvas");
-        if (!cv || !AppState.isGameRunning) return;
-        const ae = document.activeElement;
-        if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || (ae.closest && ae.closest(".modal-overlay")))) return;
-        try { cv.focus({ preventScroll: true }); } catch (e) {}
-    };
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) setTimeout(refocus, 50);
-    });
-    window.addEventListener("focus", () => setTimeout(refocus, 50));
-    window.addEventListener("pointerdown", refocus, { capture: true });
-}
+    // Ensure #game-container and #canvas have real layout dimensions BEFORE GeneralsZH.js initializes SDL2
+    // (#intro-video-overlay sits above it at z-index: 200000 until doActualGameStart hides the overlay)
+    const preGameContainer = document.getElementById('game-container');
+    if (preGameContainer) preGameContainer.style.display = 'flex';
+    enforceCanvasResolution();
 
-function doActualGameStart() {
+    function doActualGameStart() {
         if (gameLaunched) return;
         gameLaunched = true;
 
@@ -1121,6 +1113,9 @@ function doActualGameStart() {
         const canvas = document.getElementById('canvas');
         if (canvas) {
             enforceCanvasResolution();
+            if (window.Module && typeof window.Module._GX_OnCanvasResize === 'function') {
+                try { window.Module._GX_OnCanvasResize(800, 600, 800, 600); } catch (e) {}
+            }
             canvas.focus({ preventScroll: true });
             installFocusGuard();
         }

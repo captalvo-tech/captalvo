@@ -107,7 +107,16 @@ const md = simulateQf(mockCanvas, visualClickClientX, visualClickClientY);
 const mu = simulateQf(mockDocument, visualClickClientX, visualClickClientY);
 assert.strictEqual(md.engX, mu.engX, 'Mousedown and Mouseup engX must be perfectly identical');
 assert.strictEqual(md.engY, mu.engY, 'Mousedown and Mouseup engY must be perfectly identical');
-console.log(`✓ Mousedown and Mouseup coordinate symmetry verified: (${md.engX}, ${md.engY}) == (${mu.engX}, ${mu.engY}).`);
+console.log(`✓ Mousedown and Mouseup coordinate symmetry verified: (${md.engX}, ${md.engY}) == (${mu.engY}, ${mu.engY}).`);
+
+// Test 7: Verify GeneralsZH.js binary glue patches for 800x600 CSS size & targetX/Y injection
+const fs = require('fs');
+const path = require('path');
+const glueCode = fs.readFileSync(path.join(__dirname, '../public/GeneralsZH.js'), 'utf8');
+assert(glueCode.includes('oa:()=>1,fa:(a,b,c)=>{a=S(a);if(!a)return-4;oa[b>>3]=800;oa[c>>3]=600;return 0}'), 'GeneralsZH.js must lock emscripten_get_element_css_size (fa) to 800x600 to prevent SDL 0x0 window resize');
+assert(glueCode.includes('v[d+10]=_engX;v[d+11]=_engY;'), 'GeneralsZH.js Qf must write scaled _engX/_engY into targetX/targetY (v[d+10]/v[d+11])');
+assert(glueCode.includes('if((e===5||e===6)&&z._mmD)try{A(z._mmD)(8,z.kl,z._mmB)}catch(_e){}'), 'GeneralsZH.js Rf must sync SDL mouse position on mousedown/mouseup before firing button callback');
+console.log('✓ GeneralsZH.js SDL2 800x600 CSS size lock, targetX/Y injection, and click motion sync verified.');
 
 console.log('✅ ALL MOUSE & VIEWPORT TESTS PASSED!\n');
 
