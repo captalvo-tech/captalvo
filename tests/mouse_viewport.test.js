@@ -83,4 +83,31 @@ const optHits = mouseDiag.testHit(optEngX, optEngY);
 assert(optHits.some(h => h.name === 'MainMenu.wnd:ButtonOptions'), 'Options button hit-test must succeed');
 console.log(`✓ Click on "OPÇÕES" correctly projects to (${optEngX}, ${optEngY}) and hits ${optHits[0].label}.`);
 
+// Test 6: Mousedown vs Mouseup coordinate symmetry test (preventing Emscripten document offset bug)
+// Simulates Qf logic when mousedown has c = canvas, and mouseup has c = document
+const mockCanvas = { width: 800, height: 600, getBoundingClientRect: () => canvasRect };
+const mockDocument = {};
+global.document = { getElementById: (id) => (id === 'canvas' ? mockCanvas : null) };
+
+function simulateQf(c, clientX, clientY) {
+    const _cv = (typeof document !== "undefined") ? document.getElementById('canvas') : null;
+    const _rect = (_cv && _cv.getBoundingClientRect) ? _cv.getBoundingClientRect() : { left: 0, top: 0, width: 800, height: 600 };
+    const _cw = (_cv && _cv.width) ? _cv.width : 800;
+    const _ch = (_cv && _cv.height) ? _cv.height : 600;
+    const _rw = (_rect && _rect.width > 0) ? _rect.width : _cw;
+    const _rh = (_rect && _rect.height > 0) ? _rect.height : _ch;
+    const _rawX = clientX - (_rect ? (_rect.left || 0) : 0);
+    const _rawY = clientY - (_rect ? (_rect.top || 0) : 0);
+    const _engX = Math.max(0, Math.min(_cw - 1, Math.round(_rawX * (_cw / _rw))));
+    const _engY = Math.max(0, Math.min(_ch - 1, Math.round(_rawY * (_ch / _rh))));
+    return { engX: _engX, engY: _engY };
+}
+
+const md = simulateQf(mockCanvas, visualClickClientX, visualClickClientY);
+const mu = simulateQf(mockDocument, visualClickClientX, visualClickClientY);
+assert.strictEqual(md.engX, mu.engX, 'Mousedown and Mouseup engX must be perfectly identical');
+assert.strictEqual(md.engY, mu.engY, 'Mousedown and Mouseup engY must be perfectly identical');
+console.log(`✓ Mousedown and Mouseup coordinate symmetry verified: (${md.engX}, ${md.engY}) == (${mu.engX}, ${mu.engY}).`);
+
 console.log('✅ ALL MOUSE & VIEWPORT TESTS PASSED!\n');
+

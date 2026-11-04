@@ -213,3 +213,4 @@ if (content.includes('\r\n')) {
 
 fs.writeFileSync(file, content, 'utf8');
 console.log('Successfully patched public/captalvo-app.js!');
+

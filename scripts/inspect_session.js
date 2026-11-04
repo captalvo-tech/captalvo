@@ -22,3 +22,4 @@ for (const e of d.events) {
         console.log(`[${e.time}] [${e.category}] ${e.message}`);
     }
 }
+

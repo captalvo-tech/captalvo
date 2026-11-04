@@ -1011,7 +1011,7 @@ function installFocusGuard() {
 function dismissAllModals() {
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.classList.remove('active');
-        modal.style.display = 'none';
+        modal.style.display = '';
     });
     document.body.classList.remove('modal-open');
 }
@@ -1826,6 +1826,7 @@ function syncModalState() {
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
+        modal.style.display = '';
         modal.classList.add('active');
         syncModalState();
     }
@@ -1835,6 +1836,7 @@ function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
         modal.classList.remove('active');
+        modal.style.display = '';
         syncModalState();
     }
 }
@@ -2545,7 +2547,10 @@ const DevConsole = {
     },
 
     open() {
-        if (this.panel) this.panel.classList.add('active');
+        if (this.panel) {
+            this.panel.style.display = '';
+            this.panel.classList.add('active');
+        }
         this.isOpen = true;
         syncModalState();
         if (document.exitPointerLock) document.exitPointerLock();
@@ -2553,7 +2558,10 @@ const DevConsole = {
     },
 
     close() {
-        if (this.panel) this.panel.classList.remove('active');
+        if (this.panel) {
+            this.panel.classList.remove('active');
+            this.panel.style.display = '';
+        }
         this.isOpen = false;
         syncModalState();
         if (this.input) this.input.blur();

@@ -422,7 +422,7 @@ canvas#canvas {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 5010;
+  z-index: 6000;
   background: rgba(7, 10, 9, 0.88);
   border: 1px solid var(--border-color);
   backdrop-filter: blur(8px);
@@ -467,7 +467,7 @@ canvas#canvas {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 10000;
   background: rgba(0, 0, 0, 0.001); /* Fundo 100% nítido, sem escurecer a vista da simulação */
   backdrop-filter: none;             /* Sem desfoque para manter o mapa tático visível */
   display: flex;
@@ -481,6 +481,8 @@ canvas#canvas {
 }
 
 .modal-overlay.active {
+  display: flex !important;
+  display: flex !important;
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -1152,7 +1154,7 @@ body:has(.modal-overlay.active) #home-main footer {
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 2500;
+  z-index: 8000;
   background: rgba(6, 10, 8, 0.9);
   border: 1px solid rgba(214, 184, 121, 0.45);
   backdrop-filter: blur(8px);

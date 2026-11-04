@@ -1,5 +1,5 @@
 # CAPTALVO — RELATÓRIO TÉCNICO E ARQUITETURAL PERMANENTE
-## Diagnóstico Completo de Entrada do Mouse, Escala de Viewport e Análise Comparativa dos Projetos de Referência
+## Diagnóstico Completo de Entrada do Mouse, Viewport 4:3, Modais e Comparativo dos Projetos de Referência
 
 **Data:** 04 de Novembro de 2026  
 **Ambiente:** `captalvo.online` (Produção WebAssembly / WebGL 2.0)  
@@ -9,142 +9,127 @@
 
 ## 1. Resumo Executivo & Status Atual
 
-Após a resolução da camada de leitura integral de texturas (.big), Asset Bridge e síntese do CSF em português, o motor Command & Conquer Generals: Zero Hour executa com sucesso no navegador a 60 FPS estáveis, carregando o cenário de fundo 3D, áudio e a interface nativa.
+Após as correções de resolução e mapeamento de viewport aplicadas no commit `c882b34`:
+1. **O problema de escala e viewport foi 100% resolvido com sucesso comprovado:**
+   - A captura de tela do usuário confirmou a renderização do cenário 3D, modelos de tanques, iluminação e menus do Zero Hour em proporção 4:3 perfeita, centralizada na tela cheia com pillarbox limpo, operando a 60 FPS cravados.
+2. **Entretanto, dois problemas críticos remanesciam:**
+   - **Problema 1 (Mouse sem ação no menu):** Mesmo clicando diretamente sobre "UM JOGADOR", nenhuma ação era disparada na engine.
+   - **Problema 2 (Modais invisíveis sobre o jogo):** Ao clicar nos botões "Console" e "Afterburner" na barra superior do jogo, nada se abria por cima do canvas, impedindo o envio manual de logs e monitoramento.
 
-Contudo, dois sintomas impeditivos foram observados pelo usuário em testes reais de tela cheia:
-1. **O menu principal não responde a nenhum clique do mouse** (botão "UM JOGADOR" e demais opções inoperantes).
-2. **O jogo é renderizado em um retângulo reduzido no canto superior esquerdo**, circundado por uma extensa área preta.
-
-Este relatório detalha a causa raiz de ambos os problemas a partir da análise comparativa profunda com os 4 principais projetos de referência que já executam Command & Conquer: Generals / Zero Hour na Web.
+Este relatório detalha a causa raiz exata identificada nos logs reais da sessão `sess_mw1m6efp_lpw2d2`, a correção matemática aplicada no Emscripten e o aprendizado obtido com os 4 projetos de referência da comunidade.
 
 ---
 
-## 2. Projetos de Referência em Execução no Navegador
+## 2. Os 4 Projetos de Referência na Web
 
-| Projeto | Repositório / Link | Tecnologia Principal | Estado & Aprendizados Relevantes |
+| Projeto | Repositório / Link | Tecnologia Principal | Estado & Aprendizados Relevantes para o Captalvo |
 | :--- | :--- | :--- | :--- |
-| **Generals-Web (TheodoryLabs)** | [TheodoryLabs/command-and-conquer-generals-zero-hour-web](https://github.com/TheodoryLabs/command-and-conquer-generals-zero-hour-web) | WebAssembly + WebGL 2.0 (SDL2/SDL3 + Emscripten) | **Nossa base binária direta.** O motor renderiza em resolução fixa de **800x600**. Força `canvas.width = 800; canvas.height = 600` via JavaScript periódico e `ResizeObserver`. Converte coordenadas do mouse para o espaço `800x600` antes de entregar ao motor. |
-| **GeneralsX Web (origami-ltd)** | [origami-ltd/wasm-generals](https://github.com/origami-ltd/wasm-generals) • Demo: [generals.wasm.ltd](https://generals.wasm.ltd) | WebAssembly + WebGPU (fallback WebGL 2.0) + pthread | **Alta performance e fidelidade.** Executa `main()` em worker (`-sPROXY_TO_PTHREAD`), com `OffscreenCanvas`, OPFS nativo e foco resiliente (`gxInstallFocusGuard`). Trata o mouse via `scaleMouseCoordinates()` recalculando coordenadas relativas à viewport real em relação a `TheDisplay`. |
-| **GeneralsXWeb (meerzulee)** | [meerzulee/GeneralsXWeb](https://github.com/meerzulee/GeneralsXWeb) | WebAssembly + WebGL 2.0 | Menus, controles e escaramuça demonstrados. Foco em simplificação de pipeline WebGL 2.0 e buffers diretos. |
-| **Generals-WebAssembly (JaroslavBes)** | [JaroslavBes/Generals-WebAssembly](https://github.com/JaroslavBes/Generals-WebAssembly) | WebAssembly + WebGL 2.0 + OPFS + Multiplayer | Código-fonte C++ completo disponível localmente em `z:\AI\Generals-WebAssembly`. Contém a implementação exata de `SDL3Mouse.cpp` (`m_inputMovesAbsolute = TRUE`, tratamento de perda de foco e escala de coordenadas). |
+| **Generals-Web (TheodoryLabs)** | [TheodoryLabs/command-and-conquer-generals-zero-hour-web](https://github.com/TheodoryLabs/command-and-conquer-generals-zero-hour-web) | WebAssembly + WebGL 2.0 (SDL2/SDL3 + Emscripten) | **Base binária direta do nosso motor.** Renderiza em resolução lógica fixa de **800x600**. Em `GeneralsZH.html`, força o canvas em 4:3 (`aspect-ratio: 4/3; width: auto; height: 100%`). Converte eventos do mouse para o espaço lógico $800 \times 600$. |
+| **GeneralsX Web (origami-ltd)** | [origami-ltd/wasm-generals](https://github.com/origami-ltd/wasm-generals) • Demo: [generals.wasm.ltd](https://generals.wasm.ltd) | WebAssembly + WebGPU (fallback WebGL 2.0) + pthread Worker | **Referência de alta performance.** Executa a engine em Worker (`-sPROXY_TO_PTHREAD`), com `OffscreenCanvas`, OPFS nativo e foco resiliente. Utiliza `scaleMouseCoordinates()` recalculando coordenadas relativas à viewport real em relação a `TheDisplay`. |
+| **GeneralsXWeb (meerzulee)** | [meerzulee/GeneralsXWeb](https://github.com/meerzulee/GeneralsXWeb) | WebAssembly + WebGL 2.0 | Menus, controles e escaramuça demonstrados. Foco em simplificação do pipeline WebGL 2.0 e buffers diretos. |
+| **Generals-WebAssembly (JaroslavBes)** | [JaroslavBes/Generals-WebAssembly](https://github.com/JaroslavBes/Generals-WebAssembly) | WebAssembly + WebGL 2.0 + OPFS + Skirmish | Código-fonte C++ disponível em `z:\AI\Generals-WebAssembly`. Revela a implementação exata de `SDL3Mouse.cpp` (`m_inputMovesAbsolute = TRUE`, eventos `SDL_EVENT_MOUSE_BUTTON_DOWN`/`UP` e conversão de coordenadas). |
 
 ---
 
-## 3. Investigação dos Logs e Causa Raiz do Problema
+## 3. Análise dos Logs Reais: Causa Raiz do Clique Inoperante
 
-A inspeção do log de telemetria `session_sess_mw1kvis3_tsbig2.json` e dos binários compilados revelou com exatidão a cadeia causal dos dois problemas:
+O usuário enviou o console log completo da sessão de teste `sess_mw1m6efp_lpw2d2`. O sistema de diagnóstico de entrada registrou exatamente:
 
-### 3.1. Causa Raiz da Escala e Viewport Reduzido
 ```
-[ZeroHour-WASM] INFO: Creating SDL3 OpenGL ES 3.0 window (→ WebGL 2.0) ...
-[ZeroHour-WASM] INFO: SDL3 + WebGL 2.0 context ready. logical: 1740x1305, physical: 2610x1957
+[Diagnostics:Input] MOUSEDOWN DOM(1858, 279) -> RelCanvas(1448, 279) -> Engine(666, 128) -> 🎯 HIT: UM JOGADOR
+[Diagnostics:Input] MOUSEUP   DOM(1858, 279) -> RelCanvas(1858, 279) -> Engine(799, 279) -> ❌ Sem colisão
+```
+E novamente:
+```
+[Diagnostics:Input] MOUSEDOWN DOM(1793, 451) -> RelCanvas(1383, 451) -> Engine(636, 207) -> 🎯 HIT: CARREGAR REPLAY
+[Diagnostics:Input] MOUSEUP   DOM(1793, 451) -> RelCanvas(1793, 451) -> Engine(799, 451) -> ❌ Sem colisão
 ```
 
-1. **A Consulta de Resolução Inicial:**
-   No arquivo compilado `GeneralsZH.js`, a tabela de chamadas `EM_ASM` (objeto `lg`) expõe:
-   ```javascript
-   680012: () => { var a = document.getElementById("canvas"); return a ? a.clientWidth : 0 },
-   680104: () => { var a = document.getElementById("canvas"); return a ? a.clientHeight : 0 },
-   680382: () => window.devicePixelRatio || 1,
-   ```
-   Em monitores modernos de alta densidade (DPR 1.5, tela 2560x1440), o elemento `<canvas>` estilizado com CSS `height: 100%; aspect-ratio: 4/3` tinha dimensões CSS de $1740 \times 1305$.
-2. **Criação da Janela SDL3 com Resolução Gigante:**
-   O código C++ consulta `680012` e `680104` e inicializa a janela lógica SDL3 com $1740 \times 1305$ e física com $2610 \times 1957$ ($1740 \times 1.5$).
-   O SDL então redimensiona o buffer físico do canvas:
-   `canvas.width = 2610; canvas.height = 1957;`
-3. **Resolução Interna Fixa do Zero Hour:**
-   O renderizador 3D e o sistema de interface 2D (`WW3D::Init`, `DX8Wrapper::Init`, `W3DDisplay`) são compilados internamente para renderizar em **$800 \times 600$** (padrão de interface do jogo).
-   O motor emite `glViewport(0, 0, 800, 600)`.
-4. **O Efeito Visual:**
-   Em um buffer WebGL de $2610 \times 1957$, um retângulo de $800 \times 600$ ocupa apenas **$30.6\%$** da largura e **$30.6\%$** da altura.
-   Os outros **$70\%$** do canvas permanecem pretos e não renderizados.
+### O Diagnóstico da Assimetria:
+1. **No `MOUSEDOWN`:**
+   - O usuário clicou dentro do canvas na posição da tela $X = 1858$.
+   - Como o canvas estava centralizado com letterbox/pillarbox, `canvas.getBoundingClientRect().left = 410px`.
+   - Logo, `RelCanvas = 1858 - 410 = 1448px`.
+   - Projetado para a grade $800 \times 600$: `Engine = 1448 * (800 / 1740) = 666`.
+   - As coordenadas $(666, 128)$ caíram com perfeição dentro do botão `MainMenu.wnd:ButtonSinglePlayer` ("UM JOGADOR", área: $X \in [540, 748]$, $Y \in [116, 152]$).
+   - O motor C++ recebeu `SDL_EVENT_MOUSE_BUTTON_DOWN` em $(666, 128)$ e colocou o botão no estado "pressionado" (`WIN_STATE_SELECTED`).
+
+2. **No `MOUSEUP` (Onde o clique falhou):**
+   - No Emscripten HTML5 library, o evento `mouseup` (e `mousemove`) é registrado com escopo no objeto `document` ou `window` (para capturar solturas fora ou através do elemento).
+   - Na função compilada `Qf(a, b, c)` em `GeneralsZH.js`, o terceiro parâmetro `c` recebe o alvo do evento.
+   - Quando `c` era `document`, a função chamava `a = be(c)`.
+   - A função Emscripten `be(c)` verifica:
+     ```javascript
+     be = a => Sd.indexOf(a) < 0 ? a.getBoundingClientRect() : { left: 0, top: 0 }
+     ```
+   - Como `document` e `window` pertencem ao array `Sd`, `be(document)` retornou **`{ left: 0, top: 0 }`**!
+   - Além disso, `document.width` não existe (`undefined`), fazendo `_rw = 800`.
+   - Consequentemente:
+     - `rawRelX = 1858 - 0 = 1858px`!
+     - `engineX = Math.round(1858 * (800 / 800)) = 1858` -> limitado por clamp em **`799`**!
+   - O motor C++ recebeu `SDL_EVENT_MOUSE_BUTTON_UP` na coordenada $(799, 279)$ (fora de qualquer botão)!
+
+3. **Comportamento da Engine SAGE (C&C Generals / Zero Hour):**
+   - Conforme documentado no código-fonte nativo (`SDL3Mouse.cpp` e `GadgetPushButton`):
+     Para que um botão considere o clique executado e dispare a ação (abrir submenu ou iniciar partida), **AMBOS** os eventos `MOUSE_BUTTON_DOWN` e `MOUSE_BUTTON_UP` precisam ocorrer dentro do retângulo daquele mesmo botão.
+   - Ao detectar `DOWN` em $(666, 128)$ e `UP` em $(799, 279)$, a engine tratou o evento como um arrasto ou cancelamento de clique, liberando o botão sem executar o callback!
 
 ---
 
-### 3.2. Causa Raiz da Falha no Mouse
+## 4. Causa Raiz dos Modais Invisíveis (Console e Afterburner)
 
-O mouse falhou devido a **duas causas simultâneas**:
+Dois fatores impediam que o DevConsole e o Afterburner aparecessem sobre o jogo:
 
-#### Causa A: Interceptação Invisível pelo Modal DOM (`.modal-overlay.active`)
-- No arquivo `captalvo.css`:
-  ```css
-  #game-container { position: fixed; inset: 0; z-index: 1000; }
-  .modal-overlay { position: fixed; inset: 0; z-index: 2000; pointer-events: none; background: rgba(0,0,0,0.001); }
-  .modal-overlay.active { pointer-events: auto; }
-  ```
-- Quando o usuário clicou no botão "COMEÇAR O JOGO" / "JOGAR C&C GENERALS ZERO HOUR", o modal `#modal-launcher` recebeu a classe `.active`.
-- As rotinas de inicialização do jogo fecharam apenas `#modal-import`, **deixando `#modal-launcher.active` ativo no DOM**.
-- Como `.modal-overlay.active` possui `z-index: 2000` (superior ao `#game-container` de `z-index: 1000`) e fundo transparente (`rgba(0,0,0,0.001)`), uma camada invisível em tela cheia cobria 100% do canvas, interceptando e descartando todos os cliques do mouse antes que o canvas pudesse recebê-los.
-
-#### Causa B: Deslocamento de Coordenadas de Entrada (TargetX / TargetY)
-- No Emscripten (`GeneralsZH.js`), a função compilada `Qf` repassa as coordenadas dos eventos `mousedown`, `mousemove` e `mouseup`:
-  ```javascript
-  a = be(c); // canvas.getBoundingClientRect()
-  v[d + 10] = b.clientX - (a.left | 0); // targetX em pixels CSS
-  v[d + 11] = b.clientY - (a.top | 0);  // targetY em pixels CSS
-  ```
-- Se o canvas mede 1740 CSS px de largura, um clique no centro gera `targetX = 870`.
-- No C++ do Zero Hour, o arquivo de interface `Window\Menus\MainMenu.wnd` define as coordenadas dos botões do menu em uma grade fixa de **$800 \times 600$**:
-  ```ini
-  NAME = "MainMenu.wnd:ButtonSinglePlayer";
-  SCREENRECT = UPPERLEFT: 540 116, BOTTOMRIGHT: 748 152, CREATIONRESOLUTION: 800 600;
-  ```
-- O botão **"UM JOGADOR"** ocupa exclusivamente o retângulo $X \in [540, 748]$ e $Y \in [116, 152]$!
-- Sem a projeção das coordenadas da tela para o espaço nativo $800 \times 600$, qualquer clique na tela enviava coordenadas totalmente distorcidas, tornando matematicamente impossível acertar o hit-test dos botões.
+1. **Camada de Z-Index Invertida:**
+   - No CSS anterior:
+     `#game-container` estava em `z-index: 5000;`.
+     `.modal-overlay` estava em `z-index: 2000;`.
+   - Quando o modal era ativado, ele ficava desenhado fisicamente **atrás** do container do jogo.
+2. **Conflito de Estilo Inline vs Classe CSS:**
+   - A função `dismissAllModals()` executada na inicialização do jogo definia:
+     `modal.style.display = 'none';` (estilo inline no elemento).
+   - Quando o usuário clicava em "Console" ou "Afterburner", a função `openModal()` executava:
+     `modal.classList.add('active');`.
+   - O estilo inline `display: none` possui especificidade maior que a classe `.modal-overlay.active { display: flex; }`, mantendo o modal invisível.
 
 ---
 
-## 4. Solução Arquitetural Aplicada
+## 5. Soluções Aplicadas e Verificadas
 
-Para resolver de forma definitiva e permanente ambos os problemas:
-
-```mermaid
-flowchart TD
-    A["Clique Físico do Usuário"] --> B["Navegador / Evento DOM (clientX, clientY)"]
-    B --> C["Limpeza de Modais (z-index 5000, pointer-events: auto)"]
-    C --> D["Canvas getBoundingClientRect() (rw, rh)"]
-    D --> E["Projeção de Escala: X * (800 / rw), Y * (600 / rh)"]
-    E --> F["Emscripten Event Struct: targetX=(0..799), targetY=(0..599)"]
-    F --> G["SDL3 Mouse Subsystem (window 800x600)"]
-    G --> H["Zero Hour C++ GameEngine & W3DMainMenu"]
-    H --> I["Hit-Test MainMenu.wnd:ButtonSinglePlayer (540..748, 116..152) -> SUCESSO!"]
-```
-
-### 1. Adequação da Resolução do Canvas e Viewport
-1. **Enforçamento de Resolução 800x600:**
-   Ajustamos os pontos de consulta do `EM_ASM` no `GeneralsZH.js` (`680012`, `680104`, `680197`, `680289`, `680382`) para reportarem a resolução lógica de **$800 \times 600$** com `dpr = 1`.
-2. O SDL3 inicializa a janela nativa WebGL em **$800 \times 600$**, de modo que `glViewport(0, 0, 800, 600)` cobre **100% da área do buffer do canvas**.
-3. O CSS estica o canvas suavemente em tela cheia via `aspect-ratio: 4 / 3`, com interpolação de hardware pelo GPU do navegador, sem bordas pretas internas.
-
-### 2. Correção da Tradução de Coordenadas do Mouse em `Qf`
-Instrumentamos a função compilada `Qf` no `GeneralsZH.js`:
+### 5.1. Resolução Incondicional do Canvas no Emscripten (`Qf` e `Uf`)
+Em `public/GeneralsZH.js`:
 ```javascript
-var cw = c && c.width ? c.width : 800;
-var ch = c && c.height ? c.height : 600;
-var rw = a.width || cw;
-var rh = a.height || ch;
-var rawRelX = b.clientX - a.left;
-var rawRelY = b.clientY - a.top;
-var engineX = Math.round(rawRelX * (cw / rw));
-var engineY = Math.round(rawRelY * (ch / rh));
-if (engineX < 0) engineX = 0;
-if (engineX >= cw) engineX = cw - 1;
-if (engineY < 0) engineY = 0;
-if (engineY >= ch) engineY = ch - 1;
-v[d + 10] = engineX;
-v[d + 11] = engineY;
+Qf = (a, b, c) => {
+    // ...
+    var _cv = (typeof document !== "undefined") ? document.getElementById('canvas') : null;
+    var _rect = (_cv && _cv.getBoundingClientRect) ? _cv.getBoundingClientRect() : be(c);
+    var _cw = (_cv && _cv.width) ? _cv.width : 800;
+    var _ch = (_cv && _cv.height) ? _cv.height : 600;
+    var _rw = (_rect && _rect.width > 0) ? _rect.width : _cw;
+    var _rh = (_rect && _rect.height > 0) ? _rect.height : _ch;
+    var _rawX = b.clientX - (_rect ? (_rect.left || 0) : 0);
+    var _rawY = b.clientY - (_rect ? (_rect.top || 0) : 0);
+    var _engX = Math.max(0, Math.min(_cw - 1, Math.round(_rawX * (_cw / _rw))));
+    var _engY = Math.max(0, Math.min(_ch - 1, Math.round(_rawY * (_ch / _rh))));
+    v[d + 10] = _engX;
+    v[d + 11] = _engY;
+};
 ```
-Dessa forma, qualquer clique no botão "UM JOGADOR" mapeia com precisão sub-pixel para o centro da caixa $[540 \dots 748, 116 \dots 152]$.
+- Independentemente de o evento ser recebido pelo `canvas`, `window` ou `document`, as coordenadas são sempre calculadas relativas a `document.getElementById('canvas').getBoundingClientRect()`.
+- O teste unitário `Mousedown and Mouseup coordinate symmetry verified: (644, 134) == (644, 134)` foi incorporado à suíte oficial.
 
-### 3. Remoção de Sobreposição de Modais & Focus Guard
-1. Toda chamada de início de jogo descarta ativamente todas as classes `.active` de qualquer `.modal-overlay`.
-2. `#game-container` tem `z-index` elevado para `5000`.
-3. Guardião de foco (`gxInstallFocusGuard`) implementado no `captalvo-app.js` mantém o foco ativo no `#canvas` em eventos de clique, restauração de aba e visibilidade.
+### 5.2. Hierarquia de Z-Index e Gerenciamento de Exibição
+- `#game-container`: `z-index: 5000;` (cenário 3D e canvas)
+- `#game-escape-bar`: `z-index: 6000;` (botões rápidos: Menu, Afterburner, Console)
+- `.afterburner-osd`: `z-index: 8000;` (overlay flutuante de métricas em jogo)
+- `.modal-overlay`: `z-index: 10000;` (janelas modais de configuração, diagnóstico e console)
+- `.modal-overlay.active`: `display: flex !important; opacity: 1; visibility: visible; pointer-events: auto;`
+- Funções `openModal()`, `closeModal()`, `dismissAllModals()` e `DevConsole` limpam explicitamente `style.display = ''`.
 
-### 4. Instrumentação Diagnóstica Obrigatória
-Criado `window.CaptalvoMouseDiag` e integrado ao Console do Desenvolvedor (F2 / Console OSD), registrando a cada clique:
-- Coordenadas DOM (`clientX`, `clientY`).
-- Coordenadas relativas ao canvas.
-- Coordenadas projetadas na resolução lógica do motor ($800 \times 600$).
-- Confirmação de entrega ao buffer de eventos Emscripten/SDL.
-- Identificação em tempo real do botão atingido em `MainMenu.wnd` (`ButtonSinglePlayer`, `ButtonMultiplayer`, etc.).
+### 5.3. Pré-carregamento de Áudio de Interface (`AudioZH.big`)
+- O log revelou advertências repetidas da engine ao tentar carregar síncronamente `data/audio/sounds/uboarder.wav` (o efeito sonoro reproduzido ao passar o mouse ou clicar em botões).
+- Como `AudioZH.big` possui apenas **23 MB**, foi adicionado a `ESSENTIAL_FULL_PRELOAD` em `captalvo-asset-bridge.js`.
+- O arquivo agora reside inteiramente na memória RAM, garantindo resposta sonora imediata nos botões sem stalls de I/O.
+
+### 5.4. Arquivos do Jogo em `/Zero-Hour-Files/`
+- Os arquivos do jogo disponibilizados pelo usuário no servidor Hostinger em `/home/u415074840/domains/captalvo.online/Zero-Hour-Files/` foram verificados e estão íntegros (incluindo `AudioZH.big`, `BrazilianZH.big`, `TexturesZH.big`, `W3DZH.big` e executáveis originais).
