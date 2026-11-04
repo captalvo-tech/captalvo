@@ -926,8 +926,8 @@ async function startGame() {
                 progressFill.style.width = `${pct}%`;
             });
         } catch (bridgeErr) {
-            console.error('[Captalvo] Erro na ponte de ativos:', bridgeErr);
-            alert('Falha ao preparar arquivos do jogo: ' + bridgeErr.message);
+            console.error('[Captalvo] Erro na ponte de ativos:', bridgeErr.stack || bridgeErr.message || bridgeErr);
+            alert('Falha ao preparar arquivos do jogo: ' + (bridgeErr.message || bridgeErr));
             progressContainer.style.display = 'none';
             return;
         }
@@ -936,31 +936,52 @@ async function startGame() {
     progressStatus.textContent = 'INICIALIZANDO MOTOR WEBASSEMBLY';
     progressDetail.textContent = 'Carregando binários do Zero Hour...';
 
+    // Helper function to inject CSF string table into Emscripten FS
+    function injectCSFTable(fsInstance, reason) {
+        if (!fsInstance || !window.CaptalvoAssetBridge) return false;
+        try {
+            const csfData = window.CaptalvoAssetBridge.getCSFData();
+            if (!csfData || csfData.length === 0) {
+                console.warn('[Captalvo] Tabela CSF não encontrada na memória para injeção (' + reason + ').');
+                return false;
+            }
+
+            const dirs = ['data', 'data/english', 'Data', 'Data/English', 'assets', 'assets/data', 'assets/data/english', 'assets/Data', 'assets/Data/English'];
+            for (const d of dirs) {
+                try { fsInstance.createPath('/', d, true, true); } catch (e) {}
+            }
+
+            const targets = [
+                ['/data', 'generals.csf'],
+                ['/data/english', 'generals.csf'],
+                ['/Data/English', 'generals.csf'],
+                ['/assets/data', 'generals.csf'],
+                ['/assets/data/english', 'generals.csf'],
+                ['/assets/Data/English', 'generals.csf']
+            ];
+
+            for (const [dir, file] of targets) {
+                try {
+                    fsInstance.createDataFile(dir, file, csfData, true, true, true);
+                } catch (e) {}
+            }
+
+            console.log(`[Captalvo] generals.csf (${csfData.length} bytes) montado no Emscripten FS via ${reason}.`);
+            return true;
+        } catch (err) {
+            console.warn(`[Captalvo] Aviso ao injetar CSF (${reason}):`, err);
+            return false;
+        }
+    }
+
     // Configure Emscripten Module
     window.Module = {
         canvas: document.getElementById('canvas'),
         preRun: [
-            function() {
+            function(mod) {
                 console.log('[Captalvo] Executando preRun da engine...');
-                try {
-                    const csfData = window.CaptalvoAssetBridge ? window.CaptalvoAssetBridge.getCSFData() : null;
-                    if (csfData && window.Module && window.Module.FS) {
-                        const FS = window.Module.FS;
-                        try { FS.createPath('/', 'data', true, true); } catch (e) {}
-                        try { FS.createPath('/data', 'english', true, true); } catch (e) {}
-                        try { FS.createPath('/', 'assets', true, true); } catch (e) {}
-                        try { FS.createPath('/assets', 'data', true, true); } catch (e) {}
-                        try { FS.createPath('/assets/data', 'english', true, true); } catch (e) {}
-
-                        try { FS.createDataFile('/data', 'generals.csf', csfData, true, true, true); } catch (e) {}
-                        try { FS.createDataFile('/data/english', 'generals.csf', csfData, true, true, true); } catch (e) {}
-                        try { FS.createDataFile('/assets/data', 'generals.csf', csfData, true, true, true); } catch (e) {}
-                        try { FS.createDataFile('/assets/data/english', 'generals.csf', csfData, true, true, true); } catch (e) {}
-                        console.log('[Captalvo] generals.csf montado com sucesso no Emscripten FS (' + csfData.length + ' bytes).');
-                    }
-                } catch (csfErr) {
-                    console.warn('[Captalvo] Aviso ao pré-montar generals.csf no Emscripten FS:', csfErr);
-                }
+                const theFS = (mod && mod.FS) || (window.Module && window.Module.FS);
+                injectCSFTable(theFS, 'preRun');
             }
         ],
         print: (text) => {
@@ -975,6 +996,8 @@ async function startGame() {
         },
         onRuntimeInitialized: () => {
             console.log('[Captalvo] Runtime WASM inicializado com sucesso.');
+            const theFS = window.Module && window.Module.FS;
+            injectCSFTable(theFS, 'onRuntimeInitialized');
             if (TelemetryManager) TelemetryManager.log('info', 'lifecycle', 'Runtime WASM inicializado com sucesso');
             progressFill.style.width = '100%';
             progressStatus.textContent = 'PRONTO';
@@ -2510,12 +2533,18 @@ function initDevConsole() {
         }
     });
 
-    // Mirror console.error & console.warn
+    // Mirror console.error & console.warn with full Error object formatting
     const origError = console.error.bind(console);
     console.error = function(...args) {
         origError(...args);
         try {
-            const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+            const text = args.map(a => {
+                if (a instanceof Error) return a.stack || a.message;
+                if (typeof a === 'object' && a !== null) {
+                    try { return JSON.stringify(a); } catch (e) { return String(a); }
+                }
+                return String(a);
+            }).join(' ');
             if (DevConsole && DevConsole.write) {
                 DevConsole.write(`[Error] ${text}`, 'log-err');
             }
@@ -2529,7 +2558,13 @@ function initDevConsole() {
     console.warn = function(...args) {
         origWarn(...args);
         try {
-            const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+            const text = args.map(a => {
+                if (a instanceof Error) return a.stack || a.message;
+                if (typeof a === 'object' && a !== null) {
+                    try { return JSON.stringify(a); } catch (e) { return String(a); }
+                }
+                return String(a);
+            }).join(' ');
             if (DevConsole && DevConsole.write) {
                 DevConsole.write(`[Warn] ${text}`, 'log-warn');
             }

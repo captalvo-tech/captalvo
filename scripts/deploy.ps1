@@ -42,17 +42,9 @@ ssh -p $HostPort "${HostUser}@${HostIp}" "$stageCmd"
 
 # 4. Inject Dynamic Build Timestamp for Anti-Cache & Pack Archives
 $BuildTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-Write-Host "==> [4/6] Injetando timestamp anti-cache ($BuildTimestamp) e compactando arquivos..."
+Write-Host "==> [4/6] Injetando timestamp anti-cache ($BuildTimestamp) em todos os assets e compactando arquivos..."
 
-$indexHtmlPath = Join-Path $PublicDir "index.html"
-if (Test-Path $indexHtmlPath) {
-    $indexHtmlContent = Get-Content -Raw -Path $indexHtmlPath -Encoding UTF8
-    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'href="captalvo\.css\?[^"]*"', "href=`"captalvo.css?t=$BuildTimestamp`"")
-    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'src="captalvo-home-sim\.js\?[^"]*"', "src=`"captalvo-home-sim.js?t=$BuildTimestamp`"")
-    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'src="captalvo-app\.js\?[^"]*"', "src=`"captalvo-app.js?t=$BuildTimestamp`"")
-    Set-Content -Path $indexHtmlPath -Value $indexHtmlContent -Encoding UTF8
-    Write-Host "    index.html atualizado com timestamp t=$BuildTimestamp" -ForegroundColor Green
-}
+node "$ScriptDir/update_html_timestamps.js"
 
 $tempTarApp = Join-Path $ProjectRoot "captalvo_app.tar.gz"
 $tempTarPublic = Join-Path $ProjectRoot "captalvo_public.tar.gz"

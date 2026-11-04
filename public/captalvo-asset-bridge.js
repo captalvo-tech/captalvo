@@ -243,7 +243,16 @@ class CaptalvoAssetBridge {
 
         // 2. Check Fully Preloaded Buffers
         if (!result && this.preloadedBuffers.has(key)) {
-            const buf = this.preloadedBuffers.get(key);
+            let buf = this.preloadedBuffers.get(key);
+            if ((key === 'englishzh.big' || key === 'english.big') && (!this._transformedSet || !this._transformedSet.has(key))) {
+                const transformed = this.transformToEnglishBig(buf);
+                if (transformed) {
+                    buf = transformed;
+                    this.preloadedBuffers.set(key, buf);
+                    this._transformedSet = this._transformedSet || new Set();
+                    this._transformedSet.add(key);
+                }
+            }
             if (start < buf.length) {
                 const actualEnd = Math.min(end + 1, buf.length);
                 result = buf.subarray(start, actualEnd);
@@ -392,7 +401,16 @@ class CaptalvoAssetBridge {
                 try {
                     const buffer = await window.CaptalvoAssetManager.readFileBuffer(meta.name);
                     if (buffer) {
-                        const u8 = new Uint8Array(buffer);
+                        let u8 = new Uint8Array(buffer);
+
+                        // If archive is EnglishZH or English, ensure it has English paths
+                        if (lower === 'englishzh.big' || lower === 'english.big') {
+                            const transformed = this.transformToEnglishBig(u8);
+                            if (transformed) {
+                                u8 = transformed;
+                            }
+                        }
+
                         this.preloadedBuffers.set(lower, u8);
                         if (window.CaptalvoAdaptiveCache) {
                             window.CaptalvoAdaptiveCache.put(lower, 0, u8.length - 1, u8, true);
@@ -457,6 +475,28 @@ class CaptalvoAssetBridge {
                         }
                     } catch (e) {}
                 }
+            }
+        }
+
+        // Final safety pass: Guarantee EnglishZH.big and English.big are present and English-transformed
+        if (!this.preloadedBuffers.has('englishzh.big') && this.preloadedBuffers.has('brazilianzh.big')) {
+            const engU8 = this.transformToEnglishBig(this.preloadedBuffers.get('brazilianzh.big'));
+            if (engU8) {
+                this.preloadedBuffers.set('englishzh.big', engU8);
+                if (window.CaptalvoAdaptiveCache) {
+                    window.CaptalvoAdaptiveCache.put('englishzh.big', 0, engU8.length - 1, engU8, true);
+                }
+                console.log('[CaptalvoBridge] EnglishZH.big garantido em RAM a partir de BrazilianZH.big.');
+            }
+        }
+        if (!this.preloadedBuffers.has('english.big') && this.preloadedBuffers.has('brazilian.big')) {
+            const engU8 = this.transformToEnglishBig(this.preloadedBuffers.get('brazilian.big'));
+            if (engU8) {
+                this.preloadedBuffers.set('english.big', engU8);
+                if (window.CaptalvoAdaptiveCache) {
+                    window.CaptalvoAdaptiveCache.put('english.big', 0, engU8.length - 1, engU8, true);
+                }
+                console.log('[CaptalvoBridge] English.big garantido em RAM a partir de Brazilian.big.');
             }
         }
 

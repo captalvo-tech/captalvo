@@ -46,6 +46,9 @@ class CaptalvoAssetManager {
         // 4. Synchronize catalog with OPFS
         await this.syncCatalogWithOPFS();
 
+        // 5. Auto-repair/synthesize English archives with native English directory tables
+        await this.repairEnglishArchives();
+
         this.isInitialized = true;
         console.log('[CaptalvoAssetManager] Sistema de armazenamento e catálogo pronto.');
     }
@@ -198,11 +201,82 @@ class CaptalvoAssetManager {
             try {
                 const aliasHandle = await this.assetsDir.getFileHandle(aliasName, { create: true });
                 const writable = await aliasHandle.createWritable();
+
+                // If English counterpart of Brazilian archive, rewrite BIG directory entries to Data\English\...
+                if ((aliasName === 'EnglishZH.big' || aliasName === 'English.big') && window.CaptalvoAssetBridge) {
+                    const buf = await fileOrBlob.arrayBuffer();
+                    const transformed = window.CaptalvoAssetBridge.transformToEnglishBig(new Uint8Array(buf));
+                    if (transformed) {
+                        await writable.write(transformed);
+                        await writable.close();
+                        console.log(`[CaptalvoAssetManager] Alias English com cabeçalhos sintetizados criado com sucesso em OPFS: ${aliasName}`);
+                        return;
+                    }
+                }
+
                 await fileOrBlob.stream().pipeTo(writable);
                 console.log(`[CaptalvoAssetManager] Alias criado com sucesso: ${filename} -> ${aliasName}`);
             } catch (e) {
                 console.warn(`[CaptalvoAssetManager] Falha ao criar alias para ${aliasName}:`, e);
             }
+        }
+    }
+
+    async repairEnglishArchives() {
+        if (!this.assetsDir) return;
+        try {
+            const pairs = [
+                { src: 'brazilianzh.big', dst: 'EnglishZH.big' },
+                { src: 'brazilian.big', dst: 'English.big' }
+            ];
+
+            for (const pair of pairs) {
+                let srcHandle = null;
+                try { srcHandle = await this.assetsDir.getFileHandle(pair.src); } catch (e) {}
+                if (!srcHandle) {
+                    try { srcHandle = await this.assetsDir.getFileHandle(pair.src.toUpperCase()); } catch (e) {}
+                }
+                if (!srcHandle) {
+                    try {
+                        for await (const [name, handle] of this.assetsDir.entries()) {
+                            if (name.toLowerCase() === pair.src) {
+                                srcHandle = handle;
+                                break;
+                            }
+                        }
+                    } catch (e) {}
+                }
+                if (!srcHandle) continue;
+
+                let needsTransform = true;
+                try {
+                    const dstHandle = await this.assetsDir.getFileHandle(pair.dst);
+                    const dstFile = await dstHandle.getFile();
+                    const headBuf = await dstFile.slice(0, 4096).arrayBuffer();
+                    const headStr = new TextDecoder('ascii').decode(headBuf);
+                    if (headStr.includes('Data\\English\\') || headStr.includes('data\\english\\')) {
+                        needsTransform = false;
+                    }
+                } catch (e) {
+                    needsTransform = true;
+                }
+
+                if (needsTransform && window.CaptalvoAssetBridge) {
+                    console.log(`[CaptalvoAssetManager] Auto-reparando e sintetizando ${pair.dst} em OPFS...`);
+                    const srcFile = await srcHandle.getFile();
+                    const srcBuf = await srcFile.arrayBuffer();
+                    const transformed = window.CaptalvoAssetBridge.transformToEnglishBig(new Uint8Array(srcBuf));
+                    if (transformed) {
+                        const dstHandle = await this.assetsDir.getFileHandle(pair.dst, { create: true });
+                        const writable = await dstHandle.createWritable();
+                        await writable.write(transformed);
+                        await writable.close();
+                        console.log(`[CaptalvoAssetManager] ${pair.dst} reparado e gravado com sucesso no OPFS.`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[CaptalvoAssetManager] Aviso ao verificar/reparar arquivos de localização:', err);
         }
     }
 
