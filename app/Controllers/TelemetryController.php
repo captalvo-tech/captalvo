@@ -5,7 +5,7 @@ namespace Captalvo\Controllers;
 
 /**
  * TelemetryController
- * Automated remote log ingestion for real-time debugging & crash analysis.
+ * Automated remote log ingestion, aggregation & admin queries.
  */
 class TelemetryController
 {
@@ -48,12 +48,12 @@ class TelemetryController
             ];
         }
 
-        // Limit payload size to 2 MB to prevent abuse
-        if (strlen($raw) > 2 * 1024 * 1024) {
+        // Limit payload size to 4 MB to prevent abuse
+        if (strlen($raw) > 4 * 1024 * 1024) {
             http_response_code(413);
             return [
                 'status' => 'error',
-                'message' => 'Payload exceeds 2MB limit'
+                'message' => 'Payload exceeds 4MB limit'
             ];
         }
 
@@ -70,6 +70,10 @@ class TelemetryController
         $clientTimestamp = (string)($data['timestamp'] ?? gmdate('Y-m-d\TH:i:s\Z'));
         $environment = is_array($data['environment'] ?? null) ? $data['environment'] : [];
         $events = is_array($data['events'] ?? null) ? $data['events'] : [];
+        $cache = is_array($data['cache'] ?? null) ? $data['cache'] : [];
+        $bridge = is_array($data['bridge'] ?? null) ? $data['bridge'] : [];
+        $engine = is_array($data['engine'] ?? null) ? $data['engine'] : [];
+        $consent = is_array($data['consent'] ?? null) ? $data['consent'] : [];
 
         $record = [
             'server_time' => gmdate('Y-m-d\TH:i:s\Z'),
@@ -77,7 +81,11 @@ class TelemetryController
             'session_id' => $sessionId,
             'client_ip' => $this->getClientIp(),
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+            'consent' => $consent,
             'environment' => $environment,
+            'cache' => $cache,
+            'bridge' => $bridge,
+            'engine' => $engine,
             'event_count' => count($events),
             'events' => $events
         ];
@@ -102,6 +110,10 @@ class TelemetryController
                 'created_at' => $record['server_time'],
                 'updated_at' => $record['server_time'],
                 'environment' => $environment,
+                'cache' => $cache,
+                'bridge' => $bridge,
+                'engine' => $engine,
+                'consent' => $consent,
                 'client_ip' => $record['client_ip'],
                 'user_agent' => $record['user_agent'],
                 'events' => $events
@@ -111,10 +123,24 @@ class TelemetryController
             if (!empty($environment)) {
                 $existingSession['environment'] = array_merge($existingSession['environment'] ?? [], $environment);
             }
+            if (!empty($cache)) {
+                $existingSession['cache'] = $cache;
+            }
+            if (!empty($bridge)) {
+                $existingSession['bridge'] = $bridge;
+            }
+            if (!empty($engine)) {
+                $existingSession['engine'] = $engine;
+            }
             $existingSession['events'] = array_merge($existingSession['events'] ?? [], $events);
         }
 
         @file_put_contents($sessionFile, json_encode($existingSession, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+
+        // Clean up logs older than 30 days (1% chance per request to avoid overhead)
+        if (mt_rand(1, 100) === 1) {
+            $this->purgeOldLogs(30);
+        }
 
         return [
             'status' => 'ok',
@@ -153,6 +179,111 @@ class TelemetryController
         ];
     }
 
+    public function getStats(): array
+    {
+        $sessionFiles = glob($this->sessionsDir . '/session_*.json') ?: [];
+        $totalSessions = count($sessionFiles);
+
+        $fileRankingMap = [];
+        $totalReads = 0;
+        $totalBytesMB = 0;
+        $modeDistribution = [];
+        $recentErrors = [];
+
+        foreach (array_slice($sessionFiles, -20) as $sFile) {
+            $content = @file_get_contents($sFile);
+            if (!$content) continue;
+            $sess = json_decode($content, true);
+            if (!is_array($sess)) continue;
+
+            $mode = $sess['bridge']['storageMode'] ?? $sess['cache']['mode'] ?? 'automatic';
+            $modeDistribution[$mode] = ($modeDistribution[$mode] ?? 0) + 1;
+
+            if (isset($sess['bridge']['fileRanking']) && is_array($sess['bridge']['fileRanking'])) {
+                foreach ($sess['bridge']['fileRanking'] as $fr) {
+                    $fn = $fr['file'] ?? 'unknown';
+                    if (!isset($fileRankingMap[$fn])) {
+                        $fileRankingMap[$fn] = [
+                            'file' => $fn,
+                            'reads' => 0,
+                            'bytesMB' => 0,
+                            'hits' => 0,
+                            'totalWaitMs' => 0,
+                            'sessions' => 0
+                        ];
+                    }
+                    $fileRankingMap[$fn]['reads'] += (int)($fr['reads'] ?? 0);
+                    $fileRankingMap[$fn]['bytesMB'] += (float)($fr['bytesMB'] ?? 0);
+                    $fileRankingMap[$fn]['totalWaitMs'] += (float)($fr['totalWaitMs'] ?? 0);
+                    $fileRankingMap[$fn]['sessions']++;
+                    $totalReads += (int)($fr['reads'] ?? 0);
+                    $totalBytesMB += (float)($fr['bytesMB'] ?? 0);
+                }
+            }
+
+            if (isset($sess['events']) && is_array($sess['events'])) {
+                foreach ($sess['events'] as $evt) {
+                    if (in_array($evt['level'] ?? '', ['error', 'fatal', 'warn'], true)) {
+                        $recentErrors[] = [
+                            'session_id' => $sess['session_id'] ?? 'unknown',
+                            'time' => $evt['time'] ?? '',
+                            'level' => $evt['level'],
+                            'category' => $evt['category'] ?? '',
+                            'message' => $evt['message'] ?? ''
+                        ];
+                        if (count($recentErrors) >= 20) break 2;
+                    }
+                }
+            }
+        }
+
+        $ranking = array_values($fileRankingMap);
+        usort($ranking, fn($a, $b) => $b['reads'] <=> $a['reads']);
+
+        return [
+            'status' => 'ok',
+            'summary' => [
+                'total_sessions' => $totalSessions,
+                'total_reads' => $totalReads,
+                'total_bytes_mb' => round($totalBytesMB, 2),
+                'mode_distribution' => $modeDistribution,
+                'storage_logs_mb' => round($this->getDirectorySize($this->storageDir) / (1024 * 1024), 2)
+            ],
+            'file_ranking' => $ranking,
+            'recent_errors' => array_slice($recentErrors, 0, 15)
+        ];
+    }
+
+    private function purgeOldLogs(int $retentionDays = 30): void
+    {
+        $cutoff = time() - ($retentionDays * 86400);
+
+        // Clean daily JSONL files
+        $dailyFiles = glob($this->storageDir . '/captalvo_telemetry_*.jsonl') ?: [];
+        foreach ($dailyFiles as $file) {
+            if (filemtime($file) < $cutoff) {
+                @unlink($file);
+            }
+        }
+
+        // Clean session JSON files
+        $sessionFiles = glob($this->sessionsDir . '/session_*.json') ?: [];
+        foreach ($sessionFiles as $file) {
+            if (filemtime($file) < $cutoff) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private function getDirectorySize(string $dir): int
+    {
+        $size = 0;
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            $size += $file->getSize();
+        }
+        return $size;
+    }
+
     private function getClientIp(): string
     {
         return $_SERVER['HTTP_CF_CONNECTING_IP']
@@ -161,4 +292,3 @@ class TelemetryController
             ?? '127.0.0.1';
     }
 }
-

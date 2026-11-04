@@ -83,3 +83,4 @@ powershell -ExecutionPolicy Bypass -File scripts/tail-logs.ps1 -Follow
 cd Z:\AI\captalvo
 powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1
 ```
+

@@ -463,31 +463,52 @@ canvas#canvas {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(4, 6, 5, 0.82);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.001); /* Fundo 100% nítido, sem escurecer a vista da simulação */
+  backdrop-filter: none;             /* Sem desfoque para manter o mapa tático visível */
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
 .modal-overlay.active {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
+}
+
+/* Oculta os elementos da interface inicial quando qualquer modal estiver ativo,
+   preservando o fundo animado (#map) 100% nítido e visível */
+body.modal-open #home-main .stack,
+body.modal-open #home-main footer,
+body:has(.modal-overlay.active) #home-main .stack,
+body:has(.modal-overlay.active) #home-main footer {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.98);
+}
+
+#home-main .stack,
+#home-main footer {
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
 }
 
 .modal-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: rgba(9, 14, 11, 0.96);
+  border: 1px solid rgba(214, 184, 121, 0.38);
   border-radius: 12px;
   width: min(640px, 94vw);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 24px rgba(214, 184, 121, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(214, 184, 121, 0.08);
+  animation: modalEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1239,4 +1260,194 @@ canvas#canvas {
   #logo {
     width: 148px;
   }
+}
+
+
+/* ==============================================================================
+   TACTICAL TABLES, ASSET MANAGER & DIAGNOSTICS ADMIN TABS
+   ============================================================================== */
+
+.storage-summary-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  background: rgba(18, 29, 23, 0.6);
+  border: 1px solid var(--border-color);
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+
+.storage-sum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storage-sum-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.storage-sum-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+}
+
+.game-files-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.game-files-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: rgba(9, 14, 11, 0.85);
+}
+
+.tactical-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tactical-table th {
+  background: rgba(18, 29, 23, 0.95);
+  color: var(--accent-gold);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.tactical-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(98, 120, 107, 0.15);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  vertical-align: middle;
+}
+
+.tactical-table tr:hover td {
+  background: rgba(214, 184, 121, 0.05);
+}
+
+.tactical-table .btn-table-action {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-primary);
+  margin-right: 4px;
+}
+
+.tactical-table .btn-table-action:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  background: rgba(214, 184, 121, 0.1);
+}
+
+.tactical-table .btn-table-action.btn-danger:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(201, 74, 74, 0.15);
+}
+
+.select-tactical {
+  background: #090e0b;
+  color: var(--accent-gold);
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.select-tactical:focus {
+  border-color: var(--accent-gold);
+}
+
+.tactical-tabs-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.tactical-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-family: var(--font-heading);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tactical-tab-btn:hover {
+  color: var(--ink);
+}
+
+.tactical-tab-btn.active {
+  color: var(--accent-gold);
+  border-bottom-color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.tactical-tab-pane {
+  display: none;
+}
+
+.tactical-tab-pane.active {
+  display: block;
+}
+
+.consent-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(18, 29, 23, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.consent-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.consent-toggle-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.consent-toggle-desc {
+  font-size: 11px;
+  color: var(--muted);
 }

@@ -948,6 +948,7 @@ async function startGame() {
         }
         if (stage === 'ready') {
             document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+            syncModalState();
             const homeMain = document.getElementById('home-main');
             if (homeMain) homeMain.style.display = 'none';
             const gameContainer = document.getElementById('game-container');
@@ -1080,15 +1081,32 @@ function setupUIEventListeners() {
     document.querySelectorAll('.modal-close, .btn-modal-close').forEach(btn => {
         btn.addEventListener('click', () => {
             const modal = btn.closest('.modal-overlay');
-            if (modal) modal.classList.remove('active');
+            if (modal) {
+                modal.classList.remove('active');
+                syncModalState();
+            }
         });
     });
 
     // Close on overlay click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.classList.remove('active');
+            if (e.target === overlay) {
+                overlay.classList.remove('active');
+                syncModalState();
+            }
         });
+    });
+
+    // Global ESC key listener to close active modal
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const activeModal = document.querySelector('.modal-overlay.active');
+            if (activeModal) {
+                activeModal.classList.remove('active');
+                syncModalState();
+            }
+        }
     });
 
     // Exit Game button
@@ -1139,14 +1157,29 @@ function setupUIEventListeners() {
     });
 }
 
+function syncModalState() {
+    const hasActiveModal = document.querySelector('.modal-overlay.active') !== null;
+    if (hasActiveModal) {
+        document.body.classList.add('modal-open');
+    } else {
+        document.body.classList.remove('modal-open');
+    }
+}
+
 function openModal(id) {
     const modal = document.getElementById(id);
-    if (modal) modal.classList.add('active');
+    if (modal) {
+        modal.classList.add('active');
+        syncModalState();
+    }
 }
 
 function closeModal(id) {
     const modal = document.getElementById(id);
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+        modal.classList.remove('active');
+        syncModalState();
+    }
 }
 
 function applyStoredSettings() {
@@ -1857,6 +1890,7 @@ const DevConsole = {
     open() {
         if (this.panel) this.panel.classList.add('active');
         this.isOpen = true;
+        syncModalState();
         if (document.exitPointerLock) document.exitPointerLock();
         setTimeout(() => { if (this.input) this.input.focus(); }, 60);
     },
@@ -1864,6 +1898,7 @@ const DevConsole = {
     close() {
         if (this.panel) this.panel.classList.remove('active');
         this.isOpen = false;
+        syncModalState();
         if (this.input) this.input.blur();
     },
 
