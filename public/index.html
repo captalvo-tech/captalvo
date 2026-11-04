@@ -132,7 +132,7 @@
     })();
     </script>
 
-    <link rel="stylesheet" href="captalvo.css?t=1793752283">
+    <link rel="stylesheet" href="captalvo.css?t=1793753368">
 </head>
 <body>
 
@@ -144,26 +144,9 @@
     <!-- In-Game Floating Escape Bar -->
     <div id="game-escape-bar" style="display:none;">
         <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
-        <button id="btn-game-console" type="button">💻 Console [ ~ ]</button>
+        <button id="btn-game-afterburner" type="button">🔥 Afterburner</button>
+        <button id="btn-game-console" type="button">💻 Console</button>
         <span id="game-fps-counter" class="game-hud-fps">-- FPS</span>
-    </div>
-
-    <!-- Backtick Developer Diagnostic Console -->
-    <div id="dev-console" hidden class="dev-console-panel">
-        <div class="dev-console-header">
-            <span>CAPTALVO // DIAGNOSTIC CONSOLE &mdash; (PRESSIONE ` OU ESC)</span>
-            <div class="dev-console-actions">
-                <button id="btn-console-sync" class="btn-console-tool" type="button" title="Sincronizar e enviar logs imediatamente ao servidor">☁️ Enviar ao Servidor</button>
-                <button id="btn-console-copy" class="btn-console-tool" type="button" title="Copiar todos os logs para a área de transferência">📋 Copiar Logs</button>
-                <button id="btn-console-clear" class="btn-console-tool" type="button" title="Limpar histórico do console">🧹 Limpar</button>
-                <button id="dev-console-close" class="dev-console-close" type="button" title="Fechar console">&times;</button>
-            </div>
-        </div>
-        <pre id="dev-console-output"></pre>
-        <form id="dev-console-form" class="dev-console-form">
-            <span class="prompt">&gt;</span>
-            <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'copy', 'status', 'diag', 'gpu', 'vfs'...">
-        </form>
     </div>
 
     <!-- Home View: Tactical Matrix & Brand Stack -->
@@ -200,11 +183,14 @@
                     <button id="btn-dock-import" class="dock-pill" type="button">
                         📁 IMPORTAR .BIG
                     </button>
+                    <button id="btn-dock-afterburner" class="dock-pill" type="button">
+                        🔥 AFTERBURNER
+                    </button>
                     <button id="btn-dock-diag" class="dock-pill" type="button">
                         🔬 DIAGNÓSTICO
                     </button>
                     <button id="btn-dock-console" class="dock-pill" type="button">
-                        💻 CONSOLE [ ~ ]
+                        💻 CONSOLE
                     </button>
                     <button id="btn-dock-settings" class="dock-pill" type="button">
                         ⚙️ CONFIGURAÇÕES
@@ -266,8 +252,11 @@
                         <button id="btn-diag" class="btn-secondary" type="button">
                             🔬 Diagnósticos
                         </button>
+                        <button id="btn-afterburner" class="btn-secondary" type="button">
+                            🔥 Afterburner HUD
+                        </button>
                         <button id="btn-toggle-console" class="btn-secondary" type="button">
-                            💻 Console [ ~ ]
+                            💻 Console
                         </button>
                         <button id="btn-settings" class="btn-secondary" type="button">
                             ⚙️ Configurações
@@ -518,13 +507,231 @@
         </div>
     </div>
 
+    <!-- Modal: Developer Diagnostic Console -->
+    <div id="modal-console" class="modal-overlay">
+        <div class="modal-card modal-console-card">
+            <div class="modal-header">
+                <h3 class="modal-title">💻 Terminal de Diagnóstico &amp; Logs</h3>
+                <div class="dev-console-actions">
+                    <button id="btn-console-sync" class="btn-console-tool" type="button" title="Sincronizar e enviar logs imediatamente ao servidor">☁️ Enviar ao Servidor</button>
+                    <button id="btn-console-copy" class="btn-console-tool" type="button" title="Copiar todos os logs para a área de transferência">📋 Copiar Logs</button>
+                    <button id="btn-console-clear" class="btn-console-tool" type="button" title="Limpar histórico do console">🧹 Limpar</button>
+                    <button class="modal-close" type="button" title="Fechar console">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body console-modal-body">
+                <pre id="dev-console-output"></pre>
+            </div>
+            <form id="dev-console-form" class="dev-console-form">
+                <span class="prompt">&gt;</span>
+                <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'status', 'afterburner', 'copy', 'sendlogs', 'clear'...">
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Afterburner Performance & Hardware Monitor -->
+    <div id="modal-afterburner" class="modal-overlay">
+        <div class="modal-card modal-afterburner-card">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title">🔥 AFTERBURNER &middot; Monitor de Hardware &amp; HUD</h3>
+                    <div class="modal-subtitle">Telemetria ao vivo &bull; WebAssembly / WebGL 2.0 &bull; Perfil de Hardware</div>
+                </div>
+                <div class="afterburner-header-actions">
+                    <button id="btn-toggle-osd" class="btn-console-tool" type="button" title="Fixar / ocultar OSD na tela">📌 Fixar OSD na Tela</button>
+                    <button class="modal-close" type="button" title="Fechar Afterburner">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body afterburner-body">
+                <!-- Top Summary Digital Gauges -->
+                <div class="afterburner-grid-top">
+                    <!-- FPS Counter -->
+                    <div class="af-metric-card af-highlight-fps">
+                        <div class="af-card-label">TAXA DE QUADROS</div>
+                        <div class="af-digital-val"><span id="af-fps-val">--</span> <span class="af-unit">FPS</span></div>
+                        <div class="af-stats-row">
+                            <span>Mín: <b id="af-fps-min">--</b></span>
+                            <span>Méd: <b id="af-fps-avg">--</b></span>
+                            <span>1% Low: <b id="af-fps-1low">--</b></span>
+                        </div>
+                    </div>
+
+                    <!-- Frametime & Real-time Graph -->
+                    <div class="af-metric-card af-highlight-ft">
+                        <div class="af-card-label">FRAMETIME (TEMPO DE QUADRO)</div>
+                        <div class="af-digital-val"><span id="af-ft-val">--</span> <span class="af-unit">ms</span></div>
+                        <div class="af-graph-wrap">
+                            <canvas id="af-ft-canvas" width="220" height="38"></canvas>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Jitter: <b id="af-ft-jitter">-- ms</b></span>
+                            <span>Monitor: <b id="af-refresh-rate">-- Hz</b></span>
+                        </div>
+                    </div>
+
+                    <!-- CPU / Processador -->
+                    <div class="af-metric-card">
+                        <div class="af-card-label">PROCESSADOR (CPU)</div>
+                        <div class="af-digital-val"><span id="af-cpu-load">--</span> <span class="af-unit">%</span></div>
+                        <div class="af-progress-wrap">
+                            <div id="af-cpu-bar" class="af-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Cores: <b id="af-cpu-cores">--</b></span>
+                            <span>Arch: <b id="af-cpu-arch">--</b></span>
+                        </div>
+                    </div>
+
+                    <!-- RAM / Memória -->
+                    <div class="af-metric-card">
+                        <div class="af-card-label">MEMÓRIA RAM</div>
+                        <div class="af-digital-val"><span id="af-ram-used">--</span> <span class="af-unit">MB</span></div>
+                        <div class="af-progress-wrap">
+                            <div id="af-ram-bar" class="af-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="af-stats-row">
+                            <span>Heap: <b id="af-ram-total">-- MB</b></span>
+                            <span>Sist.: <b id="af-ram-system">-- GB</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deep Hardware Profile Details -->
+                <div class="afterburner-details-grid">
+                    <!-- Disco / Storage Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>💾 DISCO &amp; ARMAZENAMENTO</span>
+                            <span id="af-disk-badge" class="status-badge badge-info">Detectando...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Tipo de Disco:</span>
+                            <span class="af-val" id="af-disk-type">Detectando velocidade I/O...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Velocidade Medida:</span>
+                            <span class="af-val" id="af-disk-speed">-- MB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Armazenamento OPFS:</span>
+                            <span class="af-val" id="af-disk-usage">-- MB / -- GB Quota</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Persistência Navegador:</span>
+                            <span class="af-val" id="af-disk-persisted">Verificando...</span>
+                        </div>
+                        <button id="btn-af-benchmark-disk" class="btn-console-tool" style="width:100%; margin-top:10px; padding:6px 10px;" type="button">
+                            ⚡ Rodar Benchmark Rápido de Disco (I/O)
+                        </button>
+                    </div>
+
+                    <!-- Placa de Vídeo / GPU Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🎮 PLACA DE VÍDEO (GPU)</span>
+                            <span id="af-gpu-badge" class="status-badge badge-success">Ativa</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Placa / Renderer:</span>
+                            <span class="af-val" id="af-gpu-renderer">Detectando...</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Fabricante WebGL:</span>
+                            <span class="af-val" id="af-gpu-vendor">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">API Gráfica / Shaders:</span>
+                            <span class="af-val" id="af-gpu-api">WebGL 2.0 (GLSL 3.00)</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Máx Texturas:</span>
+                            <span class="af-val" id="af-gpu-max-tex">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Rede / Tráfego (Download & Upload) Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🌐 REDE &amp; CONSUMO</span>
+                            <span id="af-net-badge" class="status-badge badge-info">Online</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Taxa de Download:</span>
+                            <span class="af-val" id="af-net-down-rate">0.0 KB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Taxa de Upload:</span>
+                            <span class="af-val" id="af-net-up-rate">0.0 KB/s</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Volume Trafegado:</span>
+                            <span class="af-val" id="af-net-total">Down: 0 MB &bull; Up: 0 KB</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Conexão &amp; RTT:</span>
+                            <span class="af-val" id="af-net-type">-- (RTT: -- ms)</span>
+                        </div>
+                    </div>
+
+                    <!-- Display & Ambiente Card -->
+                    <div class="af-detail-card">
+                        <div class="af-detail-title">
+                            <span>🖥️ TELA &amp; ENERGIA</span>
+                            <span class="status-badge badge-success">Ativo</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Monitor:</span>
+                            <span class="af-val" id="af-disp-screen">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Resolução Janela / DPR:</span>
+                            <span class="af-val" id="af-disp-window">--</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Cores &amp; HDR:</span>
+                            <span class="af-val" id="af-disp-colors">24 bits (SDR)</span>
+                        </div>
+                        <div class="af-detail-row">
+                            <span class="af-key">Alimentação / Bateria:</span>
+                            <span class="af-val" id="af-power-status">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="afterburner-footer-bar">
+                    <span class="af-server-sync-info">
+                        ⚡ Telemetria e hardware vinculados à sessão: <code id="af-session-id">--</code>
+                    </span>
+                    <button id="btn-af-sync-telemetry" class="btn-primary" style="font-size:12px; padding:8px 14px;" type="button">
+                        ☁️ Sincronizar Tudo ao Servidor
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating On-Screen Display (OSD Overlay) inspired by MSI Afterburner -->
+    <div id="afterburner-osd" class="afterburner-osd hidden">
+        <div class="osd-drag-handle">
+            <span>⚡ CAPTALVO AF</span>
+            <button id="btn-osd-close" class="osd-btn-close" type="button" title="Fechar OSD">&times;</button>
+        </div>
+        <div class="osd-row"><span class="osd-label">FPS:</span> <span id="osd-fps" class="osd-val-fps">--</span> <span class="osd-unit">FPS</span> <span id="osd-frametime" class="osd-dim">(-- ms)</span></div>
+        <div class="osd-row"><span class="osd-label">CPU:</span> <span id="osd-cpu">-- %</span> <span id="osd-cpu-cores" class="osd-dim">(-- cores)</span></div>
+        <div class="osd-row"><span class="osd-label">RAM:</span> <span id="osd-ram">-- MB</span> <span id="osd-ram-max" class="osd-dim">/ -- GB</span></div>
+        <div class="osd-row"><span class="osd-label">GPU:</span> <span id="osd-gpu" class="osd-val-gpu">--</span></div>
+        <div class="osd-row"><span class="osd-label">DISK:</span> <span id="osd-disk">--</span></div>
+        <div class="osd-row"><span class="osd-label">NET:</span> <span id="osd-net">↓ 0 KB/s &bull; ↑ 0 KB/s</span></div>
+    </div>
+
     <!-- Captalvo Interactive Simulation Script -->
-    <script src="captalvo-home-sim.js?t=1793752283"></script>
+    <script src="captalvo-home-sim.js?t=1793753368"></script>
 
     <!-- Captalvo Application Script -->
-    <script src="captalvo-app.js?t=1793752283"></script>
+    <script src="captalvo-app.js?t=1793753368"></script>
 </body>
 </html>
+
 
 
 

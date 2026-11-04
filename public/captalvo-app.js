@@ -41,6 +41,370 @@ const AppState = {
 };
 
 // =============================================================================
+// CAPTALVO HARDWARE & CLIENT ENVIRONMENT PROFILER
+// =============================================================================
+const CaptalvoHardwareProfiler = {
+    profile: {
+        disk: {
+            type: 'Detectando velocidade...',
+            category: 'unknown',
+            speedMBps: null,
+            writeMs: null,
+            readMs: null,
+            quotaGB: null,
+            usedMB: null,
+            opfs: false,
+            persisted: false
+        },
+        cpu: {
+            cores: navigator.hardwareConcurrency || 4,
+            architecture: 'x86_64',
+            bitness: '64',
+            platform: navigator.platform || 'Unknown',
+            loadPercent: 0,
+            jitterMs: 0,
+            benchScore: 0
+        },
+        gpu: {
+            renderer: 'Detectando...',
+            vendor: 'Desconhecido',
+            api: 'WebGL 2.0',
+            maxTextureSize: 0,
+            maxRenderbufferSize: 0,
+            shadingLanguage: 'GLSL ES 3.00',
+            webgpu: false
+        },
+        ram: {
+            systemRamGB: navigator.deviceMemory || 8,
+            heapUsedMB: 0,
+            heapTotalMB: 0,
+            heapLimitMB: 0,
+            heapPercent: 0
+        },
+        display: {
+            screen: `${window.screen ? window.screen.width : 0}x${window.screen ? window.screen.height : 0}`,
+            window: `${window.innerWidth}x${window.innerHeight}`,
+            dpr: window.devicePixelRatio || 1,
+            refreshRateHz: 60,
+            colorDepth: window.screen ? window.screen.colorDepth : 24,
+            hdr: false
+        },
+        network: {
+            effectiveType: 'unknown',
+            downlinkMbps: 0,
+            rttMs: 0,
+            saveData: false,
+            downloadSpeedKBps: 0,
+            uploadSpeedKBps: 0,
+            totalDownloadedBytes: 0,
+            totalUploadedBytes: 0
+        },
+        battery: {
+            level: null,
+            charging: null
+        },
+        os: {
+            platform: navigator.platform || '',
+            userAgent: navigator.userAgent || '',
+            language: navigator.language || '',
+            languages: navigator.languages ? Array.from(navigator.languages) : [],
+            timezone: ''
+        }
+    },
+
+    isBenchmarkingDisk: false,
+    refreshRateDetected: false,
+
+    async init() {
+        this.inspectDisplay();
+        this.inspectGPU();
+        this.inspectCPU();
+        this.inspectRAM();
+        this.inspectNetwork();
+        this.inspectOS();
+        this.inspectBattery();
+        this.measureRefreshRate();
+        this.setupTrafficObserver();
+        await this.inspectDisk();
+    },
+
+    inspectDisplay() {
+        if (window.screen) {
+            this.profile.display.screen = `${window.screen.width}x${window.screen.height}`;
+            this.profile.display.colorDepth = window.screen.colorDepth || 24;
+        }
+        this.profile.display.window = `${window.innerWidth}x${window.innerHeight}`;
+        this.profile.display.dpr = +(window.devicePixelRatio || 1).toFixed(2);
+        try {
+            this.profile.display.hdr = window.matchMedia('(dynamic-range: high)').matches;
+        } catch (e) {
+            this.profile.display.hdr = false;
+        }
+    },
+
+    inspectGPU() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            if (gl) {
+                this.profile.gpu.api = (canvas.getContext('webgl2') ? 'WebGL 2.0 (Shader ES 3.00)' : 'WebGL 1.0');
+                const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                if (dbg) {
+                    this.profile.gpu.vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || 'Genérico';
+                    this.profile.gpu.renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || 'GPU WebGL';
+                }
+                this.profile.gpu.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+                this.profile.gpu.maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || 4096;
+                this.profile.gpu.shadingLanguage = gl.getParameter(gl.SHADING_LANGUAGE_VERSION) || 'GLSL ES 3.00';
+            }
+            this.profile.gpu.webgpu = !!navigator.gpu;
+        } catch (e) {
+            this.profile.gpu.renderer = 'Acelerador Bloqueado/Restrito';
+        }
+    },
+
+    async inspectCPU() {
+        this.profile.cpu.cores = navigator.hardwareConcurrency || 4;
+        this.profile.cpu.platform = navigator.platform || 'Unknown';
+
+        // UserAgentData high entropy values (Chromium 90+)
+        if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+            try {
+                const data = await navigator.userAgentData.getHighEntropyValues(['architecture', 'bitness', 'model', 'platformVersion']);
+                if (data.architecture) this.profile.cpu.architecture = data.architecture;
+                if (data.bitness) this.profile.cpu.bitness = data.bitness;
+            } catch (e) {}
+        } else {
+            const ua = navigator.userAgent;
+            if (/x86_64|Win64|WOW64|x64/i.test(ua)) {
+                this.profile.cpu.architecture = 'x86';
+                this.profile.cpu.bitness = '64';
+            } else if (/arm64|aarch64/i.test(ua)) {
+                this.profile.cpu.architecture = 'ARM';
+                this.profile.cpu.bitness = '64';
+            }
+        }
+
+        // Quick micro-benchmark (Single-core performance score)
+        try {
+            const tStart = performance.now();
+            let sum = 0;
+            for (let i = 0; i < 40000; i++) {
+                sum += Math.sqrt(i * 1.618) + (i % 7);
+            }
+            const dur = Math.max(0.1, performance.now() - tStart);
+            this.profile.cpu.benchScore = Math.round(40000 / dur);
+        } catch (e) {}
+    },
+
+    inspectRAM() {
+        this.profile.ram.systemRamGB = navigator.deviceMemory || 8;
+        if (window.performance && performance.memory) {
+            const m = performance.memory;
+            this.profile.ram.heapUsedMB = +(m.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+            this.profile.ram.heapTotalMB = +(m.totalJSHeapSize / (1024 * 1024)).toFixed(1);
+            this.profile.ram.heapLimitMB = +(m.jsHeapSizeLimit / (1024 * 1024)).toFixed(0);
+            this.profile.ram.heapPercent = Math.min(100, Math.round((m.usedJSHeapSize / m.totalJSHeapSize) * 100));
+        }
+    },
+
+    inspectNetwork() {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) {
+            this.profile.network.effectiveType = conn.effectiveType || '4g';
+            this.profile.network.downlinkMbps = conn.downlink || 10;
+            this.profile.network.rttMs = conn.rtt || 20;
+            this.profile.network.saveData = !!conn.saveData;
+        }
+    },
+
+    inspectOS() {
+        this.profile.os.platform = navigator.platform || 'Unknown';
+        this.profile.os.userAgent = navigator.userAgent || '';
+        this.profile.os.language = navigator.language || 'pt-BR';
+        this.profile.os.languages = navigator.languages ? Array.from(navigator.languages) : [];
+        try {
+            this.profile.os.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch (e) {}
+    },
+
+    async inspectBattery() {
+        if (navigator.getBattery) {
+            try {
+                const batt = await navigator.getBattery();
+                this.profile.battery.level = Math.round(batt.level * 100);
+                this.profile.battery.charging = batt.charging;
+                batt.addEventListener('levelchange', () => {
+                    this.profile.battery.level = Math.round(batt.level * 100);
+                });
+                batt.addEventListener('chargingchange', () => {
+                    this.profile.battery.charging = batt.charging;
+                });
+            } catch (e) {}
+        }
+    },
+
+    measureRefreshRate() {
+        if (this.refreshRateDetected) return;
+        let frames = 0;
+        let lastTime = performance.now();
+        const intervals = [];
+
+        const sample = (now) => {
+            const delta = now - lastTime;
+            lastTime = now;
+            if (frames > 4 && delta > 2 && delta < 50) {
+                intervals.push(delta);
+            }
+            frames++;
+            if (frames < 45) {
+                requestAnimationFrame(sample);
+            } else {
+                this.refreshRateDetected = true;
+                if (intervals.length > 10) {
+                    intervals.sort((a, b) => a - b);
+                    const median = intervals[Math.floor(intervals.length / 2)];
+                    const rawHz = 1000 / median;
+                    const standards = [60, 75, 90, 120, 144, 165, 240, 360];
+                    let closest = 60;
+                    let minDiff = 999;
+                    for (const std of standards) {
+                        const diff = Math.abs(rawHz - std);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closest = std;
+                        }
+                    }
+                    this.profile.display.refreshRateHz = (minDiff < 8) ? closest : Math.round(rawHz);
+                }
+            }
+        };
+        requestAnimationFrame(sample);
+    },
+
+    setupTrafficObserver() {
+        let lastObservedBytes = 0;
+        let lastObservedTime = performance.now();
+
+        try {
+            if (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes && PerformanceObserver.supportedEntryTypes.includes('resource')) {
+                const observer = new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                        const bytes = entry.transferSize || entry.encodedBodySize || 0;
+                        this.profile.network.totalDownloadedBytes += bytes;
+                    }
+                });
+                observer.observe({ type: 'resource', buffered: true });
+            }
+        } catch (e) {}
+
+        setInterval(() => {
+            const now = performance.now();
+            const elapsed = Math.max(0.5, (now - lastObservedTime) / 1000);
+            const deltaBytes = Math.max(0, this.profile.network.totalDownloadedBytes - lastObservedBytes);
+            lastObservedBytes = this.profile.network.totalDownloadedBytes;
+            lastObservedTime = now;
+
+            this.profile.network.downloadSpeedKBps = +( (deltaBytes / elapsed) / 1024 ).toFixed(1);
+        }, 1000);
+    },
+
+    async inspectDisk() {
+        try {
+            if (navigator.storage && navigator.storage.estimate) {
+                const est = await navigator.storage.estimate();
+                if (est.quota) this.profile.disk.quotaGB = +(est.quota / (1024 * 1024 * 1024)).toFixed(1);
+                if (typeof est.usage === 'number') this.profile.disk.usedMB = +(est.usage / (1024 * 1024)).toFixed(1);
+            }
+            if (navigator.storage && navigator.storage.persisted) {
+                this.profile.disk.persisted = await navigator.storage.persisted();
+            }
+
+            if (navigator.storage && navigator.storage.getDirectory) {
+                this.profile.disk.opfs = true;
+                await this.benchmarkDiskOPFS();
+            } else {
+                this.profile.disk.opfs = false;
+                this.profile.disk.type = 'Armazenamento Web Padrão (Sem OPFS)';
+                this.profile.disk.category = 'standard';
+            }
+        } catch (e) {
+            console.warn('[HardwareProfiler] Erro inspecionando disco:', e);
+            this.profile.disk.type = 'Armazenamento Local';
+        }
+        return this.profile.disk;
+    },
+
+    async benchmarkDiskOPFS() {
+        if (this.isBenchmarkingDisk) return;
+        this.isBenchmarkingDisk = true;
+        try {
+            const root = await navigator.storage.getDirectory();
+            const fileName = `__captalvo_bench_${Date.now()}.tmp`;
+            const fileHandle = await root.getFileHandle(fileName, { create: true });
+
+            // 2 MB test payload
+            const sizeBytes = 2 * 1024 * 1024;
+            const buffer = new Uint8Array(sizeBytes);
+            for (let i = 0; i < 2048; i += 4) {
+                buffer[i] = (i * 37) & 0xff;
+                buffer[i + 1] = (i * 91) & 0xff;
+                buffer[i + 2] = (i * 13) & 0xff;
+                buffer[i + 3] = (i * 157) & 0xff;
+            }
+
+            // Write benchmark
+            const t0 = performance.now();
+            const writable = await fileHandle.createWritable();
+            await writable.write(buffer);
+            await writable.close();
+            const writeDuration = Math.max(1, performance.now() - t0);
+
+            // Read benchmark
+            const t1 = performance.now();
+            const file = await fileHandle.getFile();
+            await file.arrayBuffer();
+            const readDuration = Math.max(1, performance.now() - t1);
+
+            // Cleanup temp file
+            await root.removeEntry(fileName).catch(() => {});
+
+            // Calculate Throughput (Total 4 MB)
+            const totalBytes = sizeBytes * 2;
+            const totalSec = (writeDuration + readDuration) / 1000;
+            const speedMBps = +((totalBytes / totalSec) / (1024 * 1024)).toFixed(1);
+
+            this.profile.disk.speedMBps = speedMBps;
+            this.profile.disk.writeMs = +writeDuration.toFixed(1);
+            this.profile.disk.readMs = +readDuration.toFixed(1);
+
+            // Classify Disk Type
+            if (speedMBps >= 350) {
+                this.profile.disk.type = 'NVMe SSD (Ultra Rápido)';
+                this.profile.disk.category = 'nvme';
+            } else if (speedMBps >= 110) {
+                this.profile.disk.type = 'SATA SSD (Rápido)';
+                this.profile.disk.category = 'sata_ssd';
+            } else {
+                this.profile.disk.type = 'HDD Convencional (Mecânico)';
+                this.profile.disk.category = 'hdd';
+            }
+        } catch (err) {
+            console.warn('[HardwareProfiler] Benchmark OPFS falhou:', err);
+            this.profile.disk.type = 'Armazenamento OPFS';
+        } finally {
+            this.isBenchmarkingDisk = false;
+        }
+    },
+
+    getExportableProfile() {
+        this.inspectRAM();
+        this.inspectDisplay();
+        return JSON.parse(JSON.stringify(this.profile));
+    }
+};
+
+// =============================================================================
 // TELEMETRY & AUTOMATED REMOTE LOG INGESTION
 // =============================================================================
 const TelemetryManager = {
@@ -82,6 +446,10 @@ const TelemetryManager = {
     },
 
     gatherEnvironment() {
+        if (CaptalvoHardwareProfiler && CaptalvoHardwareProfiler.profile) {
+            return CaptalvoHardwareProfiler.getExportableProfile();
+        }
+
         let glInfo = { renderer: 'Unknown', vendor: 'Unknown' };
         try {
             const canvas = document.createElement('canvas');
@@ -133,19 +501,28 @@ const TelemetryManager = {
         if (this.isFlushing || this.queue.length === 0) return;
         this.isFlushing = true;
 
+        const currentEnv = (CaptalvoHardwareProfiler && CaptalvoHardwareProfiler.profile)
+            ? CaptalvoHardwareProfiler.getExportableProfile()
+            : this.environment;
+
         const batch = this.queue.splice(0, 40);
         const payload = {
             session_id: this.sessionId,
             timestamp: new Date().toISOString(),
-            environment: this.environment,
+            environment: currentEnv,
             events: batch
         };
+
+        const jsonStr = JSON.stringify(payload);
+        if (CaptalvoHardwareProfiler && CaptalvoHardwareProfiler.profile.network) {
+            CaptalvoHardwareProfiler.profile.network.totalUploadedBytes += jsonStr.length;
+        }
 
         try {
             const res = await fetch('/api/telemetry', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: jsonStr,
                 keepalive: true
             });
 
@@ -161,11 +538,15 @@ const TelemetryManager = {
 
     flushBeacon() {
         if (this.queue.length === 0) return;
+        const currentEnv = (CaptalvoHardwareProfiler && CaptalvoHardwareProfiler.profile)
+            ? CaptalvoHardwareProfiler.getExportableProfile()
+            : this.environment;
+
         const batch = this.queue.splice(0, 40);
         const payload = {
             session_id: this.sessionId,
             timestamp: new Date().toISOString(),
-            environment: this.environment,
+            environment: currentEnv,
             events: batch
         };
 
@@ -184,7 +565,9 @@ const TelemetryManager = {
 // Initialization
 // -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+    await CaptalvoHardwareProfiler.init();
     TelemetryManager.init();
+    AfterburnerManager.init();
     initServiceWorker();
     await checkStorageSupport();
     await checkBackendHealth();
@@ -192,7 +575,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupUIEventListeners();
     applyStoredSettings();
     initDevConsole();
-    initFpsMonitor();
 });
 
 // -----------------------------------------------------------------------------
@@ -607,6 +989,10 @@ function setupUIEventListeners() {
     if (btnDockImport) {
         btnDockImport.addEventListener('click', () => openModal('modal-import'));
     }
+    const btnDockAfterburner = document.getElementById('btn-dock-afterburner');
+    if (btnDockAfterburner) {
+        btnDockAfterburner.addEventListener('click', () => AfterburnerManager.openModal());
+    }
     const btnDockDiag = document.getElementById('btn-dock-diag');
     if (btnDockDiag) {
         btnDockDiag.addEventListener('click', async () => {
@@ -616,7 +1002,7 @@ function setupUIEventListeners() {
     }
     const btnDockConsole = document.getElementById('btn-dock-console');
     if (btnDockConsole) {
-        btnDockConsole.addEventListener('click', () => DevConsole.toggle());
+        btnDockConsole.addEventListener('click', () => DevConsole.open());
     }
     const btnDockSettings = document.getElementById('btn-dock-settings');
     if (btnDockSettings) {
@@ -631,14 +1017,19 @@ function setupUIEventListeners() {
         openModal('modal-diag');
         await CaptalvoDiagnostics.renderDiagnosticsUI();
     });
+    const btnAfterburner = document.getElementById('btn-afterburner');
+    if (btnAfterburner) {
+        btnAfterburner.addEventListener('click', () => AfterburnerManager.openModal());
+    }
     document.getElementById('btn-toggle-console').addEventListener('click', () => {
-        DevConsole.toggle();
+        DevConsole.open();
     });
+    const btnGameAfterburner = document.getElementById('btn-game-afterburner');
+    if (btnGameAfterburner) {
+        btnGameAfterburner.addEventListener('click', () => AfterburnerManager.toggleOSD());
+    }
     document.getElementById('btn-game-console').addEventListener('click', () => {
-        DevConsole.toggle();
-    });
-    document.getElementById('dev-console-close').addEventListener('click', () => {
-        DevConsole.close();
+        DevConsole.open();
     });
     document.getElementById('btn-run-diag').addEventListener('click', async () => {
         await CaptalvoDiagnostics.renderDiagnosticsUI();
@@ -944,7 +1335,357 @@ Latência API: ${diag.net.latency}
 };
 
 // =============================================================================
-// DEVELOPER CONSOLE (Backtick / Tilde Command Shell)
+// AFTERBURNER HUD & PERFORMANCE MONITOR
+// =============================================================================
+const AfterburnerManager = {
+    isOSDVisible: false,
+    frameBuffer: [],
+    maxBuffer: 90,
+    lastFrameTime: performance.now(),
+    frameCount: 0,
+    lastFpsUpdate: performance.now(),
+    fps: 0,
+    minFps: 999,
+    maxFps: 0,
+    avgFps: 0,
+    onePercentLowFps: 0,
+    currentFrametime: 16.6,
+    jitterMs: 0,
+    cpuLoadPercent: 0,
+    canvasCtx: null,
+    sparklineCanvas: null,
+
+    init() {
+        this.sparklineCanvas = document.getElementById('af-ft-canvas');
+        if (this.sparklineCanvas) {
+            this.canvasCtx = this.sparklineCanvas.getContext('2d');
+        }
+
+        this.startLoop();
+        this.startCpuTracker();
+        this.initOsdDragging();
+
+        // Bind Afterburner UI controls
+        const btnToggleOsd = document.getElementById('btn-toggle-osd');
+        if (btnToggleOsd) {
+            btnToggleOsd.addEventListener('click', () => this.toggleOSD());
+        }
+        const btnOsdClose = document.getElementById('btn-osd-close');
+        if (btnOsdClose) {
+            btnOsdClose.addEventListener('click', () => this.hideOSD());
+        }
+        const btnAfBench = document.getElementById('btn-af-benchmark-disk');
+        if (btnAfBench) {
+            btnAfBench.addEventListener('click', () => this.runDiskBenchmark());
+        }
+        const btnAfSync = document.getElementById('btn-af-sync-telemetry');
+        if (btnAfSync) {
+            btnAfSync.addEventListener('click', async () => {
+                const orig = btnAfSync.textContent;
+                btnAfSync.textContent = '⏳ Sincronizando...';
+                await TelemetryManager.flush();
+                btnAfSync.textContent = '✅ Sincronizado!';
+                setTimeout(() => { btnAfSync.textContent = orig; }, 2000);
+            });
+        }
+    },
+
+    openModal() {
+        openModal('modal-afterburner');
+        this.updateModal();
+    },
+
+    toggleOSD() {
+        const osd = document.getElementById('afterburner-osd');
+        if (!osd) return;
+        this.isOSDVisible = !this.isOSDVisible;
+        if (this.isOSDVisible) {
+            osd.classList.remove('hidden');
+        } else {
+            osd.classList.add('hidden');
+        }
+    },
+
+    hideOSD() {
+        const osd = document.getElementById('afterburner-osd');
+        if (osd) osd.classList.add('hidden');
+        this.isOSDVisible = false;
+    },
+
+    async runDiskBenchmark() {
+        const btn = document.getElementById('btn-af-benchmark-disk');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Executando Benchmark I/O...';
+        }
+        await CaptalvoHardwareProfiler.benchmarkDiskOPFS();
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '⚡ Rodar Benchmark Rápido de Disco (I/O)';
+        }
+        this.updateModal();
+        if (DevConsole && DevConsole.isOpen) {
+            DevConsole.write(`[Disk Benchmark] ${CaptalvoHardwareProfiler.profile.disk.type} - Velocidade: ${CaptalvoHardwareProfiler.profile.disk.speedMBps} MB/s`, 'log-ok');
+        }
+    },
+
+    startLoop() {
+        const tick = (now) => {
+            const delta = now - this.lastFrameTime;
+            this.lastFrameTime = now;
+
+            if (delta > 0 && delta < 500) {
+                this.currentFrametime = delta;
+                this.frameBuffer.push(delta);
+                if (this.frameBuffer.length > this.maxBuffer) {
+                    this.frameBuffer.shift();
+                }
+            }
+
+            this.frameCount++;
+            if (now - this.lastFpsUpdate >= 500) {
+                const elapsed = (now - this.lastFpsUpdate) / 1000;
+                this.fps = Math.round(this.frameCount / elapsed);
+                this.frameCount = 0;
+                this.lastFpsUpdate = now;
+
+                if (this.frameBuffer.length > 5) {
+                    const sorted = [...this.frameBuffer].sort((a, b) => a - b);
+                    const sum = this.frameBuffer.reduce((a, b) => a + b, 0);
+                    const avgFt = sum / this.frameBuffer.length;
+                    this.avgFps = Math.round(1000 / avgFt);
+                    this.minFps = Math.round(1000 / sorted[sorted.length - 1]);
+                    this.maxFps = Math.round(1000 / sorted[0]);
+
+                    const p99Index = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99));
+                    const p99Frametime = sorted[p99Index] || avgFt;
+                    this.onePercentLowFps = Math.round(1000 / Math.max(1, p99Frametime));
+                    this.jitterMs = +(sorted[sorted.length - 1] - sorted[0]).toFixed(1);
+                }
+
+                // Update escape bar FPS
+                const escapeFps = document.getElementById('game-fps-counter');
+                if (escapeFps) escapeFps.textContent = `${this.fps} FPS`;
+
+                this.updateUI();
+            }
+
+            this.drawSparkline();
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    },
+
+    startCpuTracker() {
+        let lastTick = performance.now();
+        setInterval(() => {
+            const now = performance.now();
+            const expected = 100;
+            const delta = now - lastTick;
+            lastTick = now;
+            const lag = Math.max(0, delta - expected);
+            this.cpuLoadPercent = Math.min(100, Math.round((lag / 16.6) * 100));
+            CaptalvoHardwareProfiler.profile.cpu.loadPercent = this.cpuLoadPercent;
+            CaptalvoHardwareProfiler.profile.cpu.jitterMs = +lag.toFixed(1);
+        }, 100);
+    },
+
+    drawSparkline() {
+        if (!this.canvasCtx || !this.sparklineCanvas || this.frameBuffer.length < 2) return;
+        const ctx = this.canvasCtx;
+        const w = this.sparklineCanvas.width;
+        const h = this.sparklineCanvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Target baseline 16.6ms line (60 FPS)
+        const baselineY = h - (16.6 / 45) * h;
+        ctx.strokeStyle = 'rgba(98, 120, 107, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(0, baselineY);
+        ctx.lineTo(w, baselineY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Plot Frametimes
+        const step = w / (this.maxBuffer - 1);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+
+        for (let i = 0; i < this.frameBuffer.length; i++) {
+            const ft = this.frameBuffer[i];
+            const x = i * step;
+            const norm = Math.min(1, ft / 45);
+            const y = h - (norm * (h - 4)) - 2;
+
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+
+        if (this.currentFrametime <= 18) {
+            ctx.strokeStyle = '#2ecc71';
+        } else if (this.currentFrametime <= 34) {
+            ctx.strokeStyle = '#f1c40f';
+        } else {
+            ctx.strokeStyle = '#e74c3c';
+        }
+        ctx.stroke();
+    },
+
+    updateUI() {
+        if (document.getElementById('modal-afterburner') && document.getElementById('modal-afterburner').classList.contains('active')) {
+            this.updateModal();
+        }
+        if (this.isOSDVisible) {
+            this.updateOSD();
+        }
+    },
+
+    updateModal() {
+        const prof = CaptalvoHardwareProfiler.profile;
+        CaptalvoHardwareProfiler.inspectRAM();
+
+        const setTxt = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+
+        setTxt('af-fps-val', this.fps || '--');
+        setTxt('af-fps-min', this.minFps === 999 ? '--' : this.minFps);
+        setTxt('af-fps-avg', this.avgFps || '--');
+        setTxt('af-fps-1low', this.onePercentLowFps || '--');
+
+        setTxt('af-ft-val', this.currentFrametime ? this.currentFrametime.toFixed(1) : '--');
+        setTxt('af-ft-jitter', this.jitterMs ? `${this.jitterMs} ms` : '0.0 ms');
+        setTxt('af-refresh-rate', prof.display.refreshRateHz ? `${prof.display.refreshRateHz} Hz` : '-- Hz');
+
+        setTxt('af-cpu-load', this.cpuLoadPercent);
+        const cpuBar = document.getElementById('af-cpu-bar');
+        if (cpuBar) cpuBar.style.width = `${this.cpuLoadPercent}%`;
+        setTxt('af-cpu-cores', `${prof.cpu.cores} Cores Lógicos`);
+        setTxt('af-cpu-arch', `${prof.cpu.architecture} (${prof.cpu.bitness}-bit)`);
+
+        setTxt('af-ram-used', prof.ram.heapUsedMB || '--');
+        const ramBar = document.getElementById('af-ram-bar');
+        if (ramBar) ramBar.style.width = `${prof.ram.heapPercent || 0}%`;
+        setTxt('af-ram-total', `${prof.ram.heapTotalMB || '--'} MB`);
+        setTxt('af-ram-system', `${prof.ram.systemRamGB || '--'} GB`);
+
+        // Disk
+        const diskBadge = document.getElementById('af-disk-badge');
+        if (diskBadge) {
+            if (prof.disk.category === 'nvme') {
+                diskBadge.className = 'status-badge badge-success';
+                diskBadge.textContent = 'NVMe SSD';
+            } else if (prof.disk.category === 'sata_ssd') {
+                diskBadge.className = 'status-badge badge-info';
+                diskBadge.textContent = 'SATA SSD';
+            } else if (prof.disk.category === 'hdd') {
+                diskBadge.className = 'status-badge badge-missing';
+                diskBadge.textContent = 'HDD (Alerta)';
+            } else {
+                diskBadge.className = 'status-badge badge-info';
+                diskBadge.textContent = 'OPFS';
+            }
+        }
+        setTxt('af-disk-type', prof.disk.type);
+        setTxt('af-disk-speed', prof.disk.speedMBps ? `${prof.disk.speedMBps} MB/s` : '-- MB/s');
+        setTxt('af-disk-usage', `${prof.disk.usedMB || 0} MB / ${prof.disk.quotaGB || 0} GB Quota`);
+        setTxt('af-disk-persisted', prof.disk.persisted ? 'Autorizado (Permanente)' : 'Padrão do Navegador');
+
+        // GPU
+        setTxt('af-gpu-renderer', prof.gpu.renderer);
+        setTxt('af-gpu-vendor', prof.gpu.vendor);
+        setTxt('af-gpu-api', prof.gpu.api);
+        setTxt('af-gpu-max-tex', `${prof.gpu.maxTextureSize} x ${prof.gpu.maxTextureSize} px`);
+
+        // Network
+        setTxt('af-net-down-rate', `${prof.network.downloadSpeedKBps} KB/s`);
+        setTxt('af-net-up-rate', `${prof.network.uploadSpeedKBps} KB/s`);
+        const downMB = (prof.network.totalDownloadedBytes / (1024 * 1024)).toFixed(1);
+        const upKB = (prof.network.totalUploadedBytes / 1024).toFixed(0);
+        setTxt('af-net-total', `Down: ${downMB} MB • Up: ${upKB} KB`);
+        setTxt('af-net-type', `${prof.network.effectiveType.toUpperCase()} (RTT: ${prof.network.rttMs} ms)`);
+
+        // Display & Power
+        setTxt('af-disp-screen', `${prof.display.screen} @ ${prof.display.refreshRateHz}Hz`);
+        setTxt('af-disp-window', `${window.innerWidth}x${window.innerHeight} (DPR: ${prof.display.dpr}x)`);
+        setTxt('af-disp-colors', `${prof.display.colorDepth} bits ${prof.display.hdr ? '(HDR Ativo)' : '(SDR)'}`);
+        if (prof.battery.charging !== null) {
+            setTxt('af-power-status', prof.battery.charging ? `⚡ Carregando (${prof.battery.level}%)` : `🔋 Bateria (${prof.battery.level}%)`);
+        } else {
+            setTxt('af-power-status', '🔌 Alimentação AC / Desktop');
+        }
+
+        setTxt('af-session-id', TelemetryManager.sessionId);
+    },
+
+    updateOSD() {
+        const prof = CaptalvoHardwareProfiler.profile;
+        const setTxt = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+
+        setTxt('osd-fps', this.fps);
+        setTxt('osd-frametime', `(${this.currentFrametime.toFixed(1)} ms)`);
+        setTxt('osd-cpu', `${this.cpuLoadPercent} %`);
+        setTxt('osd-cpu-cores', `(${prof.cpu.cores}c)`);
+        setTxt('osd-ram', `${prof.ram.heapUsedMB || 0} MB`);
+        setTxt('osd-ram-max', `/ ${prof.ram.systemRamGB} GB`);
+        
+        const shortGpu = (prof.gpu.renderer || 'GPU').split('(')[0].replace('ANGLE', '').trim();
+        setTxt('osd-gpu', shortGpu || 'GPU WebGL');
+
+        const diskLabel = prof.disk.category === 'nvme' ? 'NVMe' : (prof.disk.category === 'sata_ssd' ? 'SSD' : 'HDD');
+        setTxt('osd-disk', `${diskLabel} ${prof.disk.speedMBps ? prof.disk.speedMBps + ' MB/s' : ''}`);
+
+        setTxt('osd-net', `↓ ${prof.network.downloadSpeedKBps} KB/s • ↑ ${prof.network.uploadSpeedKBps} KB/s`);
+    },
+
+    initOsdDragging() {
+        const osd = document.getElementById('afterburner-osd');
+        const handle = osd ? osd.querySelector('.osd-drag-handle') : null;
+        if (!osd || !handle) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let origLeft = 0;
+        let origTop = 0;
+
+        handle.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button')) return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = osd.getBoundingClientRect();
+            origLeft = rect.left;
+            origTop = rect.top;
+            osd.style.right = 'auto';
+            osd.style.left = `${origLeft}px`;
+            osd.style.top = `${origTop}px`;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            osd.style.left = `${Math.max(10, Math.min(window.innerWidth - 220, origLeft + dx))}px`;
+            osd.style.top = `${Math.max(10, Math.min(window.innerHeight - 150, origTop + dy))}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+    }
+};
+
+// =============================================================================
+// DEVELOPER CONSOLE (Modal Terminal & Diagnostic Logs)
 // =============================================================================
 const DevConsole = {
     panel: null,
@@ -956,12 +1697,12 @@ const DevConsole = {
     isOpen: false,
 
     commands: [
-        'help', 'copy', 'sendlogs', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
-        'ping', 'capture', 'cursor', 'clear', 'reload', 'close'
+        'help', 'afterburner', 'osd', 'hw', 'bench', 'copy', 'sendlogs', 'status', 'diag', 'gpu',
+        'vfs', 'audio', 'mem', 'fps', 'ping', 'capture', 'cursor', 'clear', 'reload', 'close'
     ],
 
     init() {
-        this.panel = document.getElementById('dev-console');
+        this.panel = document.getElementById('modal-console');
         this.output = document.getElementById('dev-console-output');
         this.form = document.getElementById('dev-console-form');
         this.input = document.getElementById('dev-console-input');
@@ -994,12 +1735,6 @@ const DevConsole = {
                 this.output.innerHTML = '';
                 this.write('Console limpo.', 'log-ok');
             });
-        }
-
-        // Close button
-        const btnClose = document.getElementById('dev-console-close');
-        if (btnClose) {
-            btnClose.addEventListener('click', () => this.close());
         }
 
         // Command submission
@@ -1038,27 +1773,13 @@ const DevConsole = {
             }
         });
 
-        // Capture phase keydown for ~ / Backtick and Escape
+        // Escape closes console modal when open
         window.addEventListener('keydown', (e) => {
-            if ((e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === 'F2') && !e.repeat) {
-                // Avoid capturing when typing inside normal inputs other than console
-                if (e.target && e.target !== this.input && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-                    return;
-                }
+            if (this.isOpen && e.key === 'Escape') {
                 e.preventDefault();
-                e.stopImmediatePropagation();
-                this.toggle();
-                return;
+                this.close();
             }
-
-            if (this.isOpen) {
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    this.close();
-                }
-                e.stopImmediatePropagation();
-            }
-        }, { capture: true });
+        });
 
         this.write('Captalvo Diagnostic Console initialized. Digite "help" para ver os comandos.', 'log-ok');
     },
@@ -1128,16 +1849,16 @@ const DevConsole = {
     },
 
     open() {
-        this.panel.hidden = false;
+        if (this.panel) this.panel.classList.add('active');
         this.isOpen = true;
         if (document.exitPointerLock) document.exitPointerLock();
-        setTimeout(() => this.input.focus(), 50);
+        setTimeout(() => { if (this.input) this.input.focus(); }, 60);
     },
 
     close() {
-        this.panel.hidden = true;
+        if (this.panel) this.panel.classList.remove('active');
         this.isOpen = false;
-        this.input.blur();
+        if (this.input) this.input.blur();
     },
 
     toggle() {
@@ -1156,6 +1877,10 @@ const DevConsole = {
         switch (cmd) {
             case 'help':
                 this.write(`Comandos disponíveis:
+  afterburner  - Abre o painel Afterburner de hardware e monitor de FPS
+  osd          - Alterna o HUD flutuante Afterburner na tela
+  hw           - Exibe o perfil completo de hardware (CPU, GPU, RAM, Disco, Tela)
+  bench        - Executa o benchmark de velocidade I/O do disco OPFS
   copy         - Copia todo o histórico de logs do console para a área de transferência
   sendlogs     - Envia/sincroniza todos os logs do console e telemetria para o servidor
   status       - Exibe resumo em tempo real do motor, áudio, memória e canvas
@@ -1170,7 +1895,38 @@ const DevConsole = {
   cursor free  - Força liberação do confinamento do ponteiro
   clear        - Limpa o histórico de mensagens do console
   reload       - Recarrega a aplicação
-  close        - Fecha este painel (ou pressione \` ou Esc)`);
+  close        - Fecha este painel modal (ou pressione Esc)`);
+                break;
+
+            case 'afterburner':
+            case 'af':
+                AfterburnerManager.openModal();
+                this.write('Painel Afterburner aberto.', 'log-ok');
+                break;
+
+            case 'osd':
+                AfterburnerManager.toggleOSD();
+                this.write(`Afterburner OSD ${AfterburnerManager.isOSDVisible ? 'visível na tela' : 'oculto'}.`, 'log-ok');
+                break;
+
+            case 'hw':
+            case 'hardware':
+                const prof = CaptalvoHardwareProfiler.profile;
+                this.write(`PERFIL DE HARDWARE & SISTEMA:
+  DISCO: ${prof.disk.type} (Velocidade: ${prof.disk.speedMBps || '--'} MB/s, Uso: ${prof.disk.usedMB || 0} MB / ${prof.disk.quotaGB || 0} GB)
+  CPU: ${prof.cpu.cores} Cores | Arch: ${prof.cpu.architecture} (${prof.cpu.bitness}-bit) | Bench: ${prof.cpu.benchScore} | Lag: ${prof.cpu.loadPercent}%
+  GPU: ${prof.gpu.renderer} (${prof.gpu.vendor}) | MaxTex: ${prof.gpu.maxTextureSize}px
+  RAM: Heap ${prof.ram.heapUsedMB} MB / ${prof.ram.heapTotalMB} MB | RAM Sistema: ${prof.ram.systemRamGB} GB
+  TELA: ${prof.display.screen} @ ${prof.display.refreshRateHz}Hz (Janela: ${prof.display.window}, DPR: ${prof.display.dpr}x)
+  REDE: ${prof.network.effectiveType.toUpperCase()} (${prof.network.downlinkMbps} Mbps, RTT: ${prof.network.rttMs} ms) | Down: ${prof.network.downloadSpeedKBps} KB/s
+  BATERIA: ${prof.battery.charging !== null ? (prof.battery.charging ? 'Carregando ' : 'Bateria ') + prof.battery.level + '%' : 'Alimentação AC'}
+  SISTEMA: ${prof.os.platform} | Timezone: ${prof.os.timezone} | Idioma: ${prof.os.language}`, 'log-ok');
+                break;
+
+            case 'bench':
+                this.write('Executando benchmark de velocidade I/O de disco (OPFS)...', 'log-warn');
+                await CaptalvoHardwareProfiler.benchmarkDiskOPFS();
+                this.write(`Benchmark concluído: ${CaptalvoHardwareProfiler.profile.disk.type} - Velocidade: ${CaptalvoHardwareProfiler.profile.disk.speedMBps} MB/s (Escrita: ${CaptalvoHardwareProfiler.profile.disk.writeMs}ms, Leitura: ${CaptalvoHardwareProfiler.profile.disk.readMs}ms)`, 'log-ok');
                 break;
 
             case 'sendlogs':
@@ -1348,23 +2104,9 @@ function initDevConsole() {
 }
 
 // =============================================================================
-// FPS MONITOR HUD
+// FPS MONITOR HUD (Integrated into AfterburnerManager)
 // =============================================================================
 function initFpsMonitor() {
-    const el = document.getElementById('game-fps-counter');
-    let lastTime = performance.now();
-    let frameCount = 0;
-
-    function tick(now) {
-        frameCount++;
-        if (now - lastTime >= 1000) {
-            const fps = Math.round((frameCount * 1000) / (now - lastTime));
-            if (el) el.textContent = `${fps} FPS`;
-            frameCount = 0;
-            lastTime = now;
-        }
-        requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
+    // Managed with sub-millisecond precision by AfterburnerManager
 }
 
