@@ -84,6 +84,29 @@ function runBridgeTests() {
         console.log('✓ Real user NVMe asset INI.big (7,607,479 bytes) verified through bridge.');
     }
 
+    // 8. Verify Synthesis of EnglishZH.big from BrazilianZH.big & CSF Extraction
+    const realBrZhPath = 'C:/Users/VIOLI/Captalvo_NVMe_Assets/BrazilianZH.big';
+    if (fs.existsSync(realBrZhPath)) {
+        const brU8 = new Uint8Array(fs.readFileSync(realBrZhPath));
+        bridge.preloadedBuffers.set('brazilianzh.big', brU8);
+
+        // Key resolution should auto-synthesize EnglishZH.big
+        const key = bridge.resolveFileKey('englishzh.big');
+        assert.strictEqual(key, 'englishzh.big');
+        assert.strictEqual(bridge.preloadedBuffers.has('englishzh.big'), true);
+
+        const engU8 = bridge.preloadedBuffers.get('englishzh.big');
+        assert.strictEqual(engU8.byteLength, brU8.byteLength);
+
+        // Verify CSF data extraction
+        const csf = bridge.getCSFData();
+        assert.notStrictEqual(csf, null);
+        assert.strictEqual(csf.length, 665565);
+        const csfMagic = String.fromCharCode(...csf.subarray(0, 4));
+        assert.strictEqual(csfMagic, ' FSC');
+        console.log('✓ Automatic synthesis of EnglishZH.big and CSF string table extraction verified.');
+    }
+
     return true;
 }
 

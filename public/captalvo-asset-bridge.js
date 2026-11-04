@@ -44,8 +44,134 @@ class CaptalvoAssetBridge {
             'shaderszh.big', 'shaders.big',
             'genseczh.big', 'gensec.big',
             'brazilianzh.big', 'englishzh.big',
-            'brazilian.big', 'english.big'
+            'brazilian.big', 'english.big',
+            'terrainzh.big', 'terrain.big',
+            'mapszh.big'
         ];
+    }
+
+    /**
+     * Synthesize an English .big archive from a Brazilian .big archive
+     * Rewrites directory entries from Data\Brazilian\... to Data\English\...
+     * preserving all exact byte offsets and payload alignments.
+     */
+    transformToEnglishBig(srcU8) {
+        if (!srcU8 || srcU8.byteLength < 16) return null;
+        try {
+            const view = new DataView(srcU8.buffer, srcU8.byteOffset, srcU8.byteLength);
+
+            const m0 = srcU8[0], m1 = srcU8[1], m2 = srcU8[2], m3 = srcU8[3];
+            if (m0 !== 0x42 || m1 !== 0x49 || m2 !== 0x47 || (m3 !== 0x46 && m3 !== 0x34)) {
+                return null;
+            }
+
+            const totalSize = view.getUint32(4, true);
+            const numFiles = view.getUint32(8, false);
+            const origHeaderSize = view.getUint32(12, false);
+
+            let pos = 16;
+            const entries = [];
+            const decoder = new TextDecoder('ascii');
+            const encoder = new TextEncoder();
+
+            for (let i = 0; i < numFiles; i++) {
+                if (pos + 8 >= srcU8.byteLength) break;
+                const offset = view.getUint32(pos, false);
+                const size = view.getUint32(pos + 4, false);
+                pos += 8;
+
+                const nameStart = pos;
+                while (pos < srcU8.byteLength && srcU8[pos] !== 0) {
+                    pos++;
+                }
+                const nameBytes = srcU8.subarray(nameStart, pos);
+                pos++;
+
+                const nameStr = decoder.decode(nameBytes);
+                const newNameStr = nameStr.replace(/brazilian/gi, 'English');
+                entries.push({ offset, size, name: newNameStr });
+            }
+
+            const outU8 = new Uint8Array(srcU8.byteLength);
+            const outView = new DataView(outU8.buffer);
+
+            // Copy payload exactly as-is from origHeaderSize onwards
+            outU8.set(srcU8.subarray(origHeaderSize), origHeaderSize);
+
+            // Write BIGF header
+            outU8[0] = 0x42; outU8[1] = 0x49; outU8[2] = 0x47; outU8[3] = m3;
+            outView.setUint32(4, totalSize, true);
+            outView.setUint32(8, numFiles, false);
+            outView.setUint32(12, origHeaderSize, false);
+
+            let wPos = 16;
+            for (const e of entries) {
+                outView.setUint32(wPos, e.offset, false);
+                outView.setUint32(wPos + 4, e.size, false);
+                wPos += 8;
+                const encodedName = encoder.encode(e.name);
+                outU8.set(encodedName, wPos);
+                wPos += encodedName.length;
+                outU8[wPos++] = 0;
+            }
+
+            while (wPos < origHeaderSize) {
+                outU8[wPos++] = 0;
+            }
+
+            return outU8;
+        } catch (err) {
+            console.error('[CaptalvoBridge] Erro ao transformar archive para English:', err);
+            return null;
+        }
+    }
+
+    /**
+     * Extract generals.csf payload directly from a .big archive buffer
+     */
+    extractCSFFromBuffer(u8) {
+        if (!u8 || u8.byteLength < 16) return null;
+        try {
+            const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+            const numFiles = view.getUint32(8, false);
+            let pos = 16;
+            for (let i = 0; i < numFiles; i++) {
+                if (pos + 8 >= u8.byteLength) break;
+                const offset = view.getUint32(pos, false);
+                const size = view.getUint32(pos + 4, false);
+                pos += 8;
+
+                const nameStart = pos;
+                while (pos < u8.byteLength && u8[pos] !== 0) {
+                    pos++;
+                }
+                let name = '';
+                for (let j = nameStart; j < pos; j++) {
+                    name += String.fromCharCode(u8[j]);
+                }
+                pos++;
+                if (name.toLowerCase().endsWith('.csf')) {
+                    return u8.subarray(offset, offset + size);
+                }
+            }
+        } catch (e) {
+            console.warn('[CaptalvoBridge] Erro ao extrair CSF de buffer:', e);
+        }
+        return null;
+    }
+
+    /**
+     * Get extracted CSF string table data for Emscripten FS injection
+     */
+    getCSFData() {
+        const candidates = ['englishzh.big', 'brazilianzh.big', 'english.big', 'brazilian.big'];
+        for (const cand of candidates) {
+            if (this.preloadedBuffers.has(cand)) {
+                const csf = this.extractCSFFromBuffer(this.preloadedBuffers.get(cand));
+                if (csf && csf.length > 0) return csf;
+            }
+        }
+        return null;
     }
 
     normalizeFilename(rawPath) {
@@ -59,6 +185,24 @@ class CaptalvoAssetBridge {
     resolveFileKey(normalizedName) {
         if (this.preloadedBuffers.has(normalizedName) || this.preloadedHeaders.has(normalizedName)) {
             return normalizedName;
+        }
+
+        // On-the-fly English archive synthesis from Brazilian edition
+        if (normalizedName === 'englishzh.big' && this.preloadedBuffers.has('brazilianzh.big')) {
+            const eng = this.transformToEnglishBig(this.preloadedBuffers.get('brazilianzh.big'));
+            if (eng) {
+                this.preloadedBuffers.set('englishzh.big', eng);
+                console.log('[CaptalvoBridge] EnglishZH.big sintetizado a partir de BrazilianZH.big com sucesso.');
+                return 'englishzh.big';
+            }
+        }
+        if (normalizedName === 'english.big' && this.preloadedBuffers.has('brazilian.big')) {
+            const eng = this.transformToEnglishBig(this.preloadedBuffers.get('brazilian.big'));
+            if (eng) {
+                this.preloadedBuffers.set('english.big', eng);
+                console.log('[CaptalvoBridge] English.big sintetizado a partir de Brazilian.big com sucesso.');
+                return 'english.big';
+            }
         }
 
         // Try aliases
@@ -252,6 +396,27 @@ class CaptalvoAssetBridge {
                         this.preloadedBuffers.set(lower, u8);
                         if (window.CaptalvoAdaptiveCache) {
                             window.CaptalvoAdaptiveCache.put(lower, 0, u8.length - 1, u8, true);
+                        }
+
+                        // Auto-synthesize English counterpart from Brazilian edition
+                        if (lower === 'brazilianzh.big') {
+                            const engU8 = this.transformToEnglishBig(u8);
+                            if (engU8) {
+                                this.preloadedBuffers.set('englishzh.big', engU8);
+                                if (window.CaptalvoAdaptiveCache) {
+                                    window.CaptalvoAdaptiveCache.put('englishzh.big', 0, engU8.length - 1, engU8, true);
+                                }
+                                console.log('[CaptalvoBridge] EnglishZH.big sintetizado para compatibilidade com o motor.');
+                            }
+                        } else if (lower === 'brazilian.big') {
+                            const engU8 = this.transformToEnglishBig(u8);
+                            if (engU8) {
+                                this.preloadedBuffers.set('english.big', engU8);
+                                if (window.CaptalvoAdaptiveCache) {
+                                    window.CaptalvoAdaptiveCache.put('english.big', 0, engU8.length - 1, engU8, true);
+                                }
+                                console.log('[CaptalvoBridge] English.big sintetizado para compatibilidade com o motor.');
+                            }
                         }
                     }
                 } catch (e) {

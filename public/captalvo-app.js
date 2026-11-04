@@ -939,6 +939,30 @@ async function startGame() {
     // Configure Emscripten Module
     window.Module = {
         canvas: document.getElementById('canvas'),
+        preRun: [
+            function() {
+                console.log('[Captalvo] Executando preRun da engine...');
+                try {
+                    const csfData = window.CaptalvoAssetBridge ? window.CaptalvoAssetBridge.getCSFData() : null;
+                    if (csfData && window.Module && window.Module.FS) {
+                        const FS = window.Module.FS;
+                        try { FS.createPath('/', 'data', true, true); } catch (e) {}
+                        try { FS.createPath('/data', 'english', true, true); } catch (e) {}
+                        try { FS.createPath('/', 'assets', true, true); } catch (e) {}
+                        try { FS.createPath('/assets', 'data', true, true); } catch (e) {}
+                        try { FS.createPath('/assets/data', 'english', true, true); } catch (e) {}
+
+                        try { FS.createDataFile('/data', 'generals.csf', csfData, true, true, true); } catch (e) {}
+                        try { FS.createDataFile('/data/english', 'generals.csf', csfData, true, true, true); } catch (e) {}
+                        try { FS.createDataFile('/assets/data', 'generals.csf', csfData, true, true, true); } catch (e) {}
+                        try { FS.createDataFile('/assets/data/english', 'generals.csf', csfData, true, true, true); } catch (e) {}
+                        console.log('[Captalvo] generals.csf montado com sucesso no Emscripten FS (' + csfData.length + ' bytes).');
+                    }
+                } catch (csfErr) {
+                    console.warn('[Captalvo] Aviso ao pré-montar generals.csf no Emscripten FS:', csfErr);
+                }
+            }
+        ],
         print: (text) => {
             console.log('[ZeroHour-WASM]', text);
             if (DevConsole) DevConsole.write(text);
