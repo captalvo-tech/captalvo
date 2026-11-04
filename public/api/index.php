@@ -50,12 +50,30 @@ if ($path === '/api/health' || $path === '/api/health.php' || str_ends_with($pat
     exit(0);
 }
 
+// Telemetry & Remote Logging Ingestion
+if ($path === '/api/telemetry' || $path === '/api/logs' || str_ends_with($path, 'telemetry') || str_ends_with($path, 'logs')) {
+    if (class_exists('Captalvo\\Controllers\\TelemetryController')) {
+        $controller = new Captalvo\Controllers\TelemetryController();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            echo json_encode($controller->ingest(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        } else {
+            // GET returns recent telemetry entries
+            echo json_encode($controller->getRecent(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }
+    } else {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'TelemetryController not loaded']);
+    }
+    exit(0);
+}
+
 // Default API endpoint response
 echo json_encode([
     'name' => 'Captalvo API',
     'slogan' => 'Conquista sem limites.',
     'status' => 'online',
     'endpoints' => [
-        '/api/health' => 'System health status and telemetry'
+        '/api/health' => 'System health status and telemetry',
+        '/api/telemetry' => 'Automated client telemetry & remote log ingestion (POST/GET)'
     ]
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

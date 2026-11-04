@@ -72,6 +72,9 @@ $applyCmd = @"
 tar -xzf /home/$HostUser/staging_captalvo/captalvo_app.tar.gz -C '$RemoteDomainPath/app/'
 tar -xzf /home/$HostUser/staging_captalvo/captalvo_public.tar.gz -C '$RemoteDomainPath/public_html/'
 rm -rf /home/$HostUser/staging_captalvo
+mkdir -p '$RemoteDomainPath/app/storage/logs/sessions'
+chmod 775 '$RemoteDomainPath/app/storage'
+chmod -R 775 '$RemoteDomainPath/app/storage/logs'
 chmod 755 '$RemoteDomainPath/public_html'
 find '$RemoteDomainPath/public_html' -type f -exec chmod 644 {} +
 find '$RemoteDomainPath/public_html' -type d -exec chmod 755 {} +

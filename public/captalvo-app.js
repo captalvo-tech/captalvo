@@ -40,10 +40,151 @@ const AppState = {
     backendHealthy: false,
 };
 
+// =============================================================================
+// TELEMETRY & AUTOMATED REMOTE LOG INGESTION
+// =============================================================================
+const TelemetryManager = {
+    sessionId: '',
+    queue: [],
+    seq: 0,
+    isFlushing: false,
+    flushTimer: null,
+    environment: null,
+
+    init() {
+        try {
+            this.sessionId = sessionStorage.getItem('captalvo_session_id') || '';
+            if (!this.sessionId) {
+                this.sessionId = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
+                sessionStorage.setItem('captalvo_session_id', this.sessionId);
+            }
+        } catch (e) {
+            this.sessionId = 'sess_' + Date.now().toString(36);
+        }
+
+        this.environment = this.gatherEnvironment();
+        this.log('info', 'session_start', 'Sessão do Captalvo iniciada', {
+            url: window.location.href,
+            referrer: document.referrer,
+            buildTime: window.__CAPTALVO_BUILD_TIME__ || null
+        });
+
+        // Periodic auto-flush every 15 seconds
+        this.flushTimer = setInterval(() => this.flush(), 15000);
+
+        // Page visibility change & unload flush via Beacon
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) this.flushBeacon();
+        });
+        window.addEventListener('pagehide', () => this.flushBeacon());
+
+        console.log(`[Telemetry] Sistema de telemetria ativo. ID da Sessão: ${this.sessionId}`);
+    },
+
+    gatherEnvironment() {
+        let glInfo = { renderer: 'Unknown', vendor: 'Unknown' };
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            if (gl) {
+                const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                if (dbg) {
+                    glInfo.vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || 'Unknown';
+                    glInfo.renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || 'Unknown';
+                }
+            }
+        } catch (e) {}
+
+        return {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform || 'Unknown',
+            language: navigator.language || 'Unknown',
+            screen: `${window.screen.width}x${window.screen.height}`,
+            pixelRatio: window.devicePixelRatio || 1,
+            deviceMemoryGB: navigator.deviceMemory || null,
+            hardwareConcurrency: navigator.hardwareConcurrency || null,
+            secureContext: window.isSecureContext,
+            sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+            crossOriginIsolated: !!window.crossOriginIsolated,
+            opfsSupported: !!(navigator.storage && navigator.storage.getDirectory),
+            gpu: glInfo
+        };
+    },
+
+    log(level, category, message, meta = {}) {
+        const entry = {
+            id: ++this.seq,
+            time: new Date().toISOString(),
+            level,
+            category,
+            message: typeof message === 'string' ? message : JSON.stringify(message),
+            meta
+        };
+
+        this.queue.push(entry);
+
+        // Instant flush on critical errors or when queue reaches 15
+        if (level === 'error' || level === 'fatal' || this.queue.length >= 15) {
+            this.flush();
+        }
+    },
+
+    async flush() {
+        if (this.isFlushing || this.queue.length === 0) return;
+        this.isFlushing = true;
+
+        const batch = this.queue.splice(0, 40);
+        const payload = {
+            session_id: this.sessionId,
+            timestamp: new Date().toISOString(),
+            environment: this.environment,
+            events: batch
+        };
+
+        try {
+            const res = await fetch('/api/telemetry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                keepalive: true
+            });
+
+            if (!res.ok) {
+                this.queue.unshift(...batch);
+            }
+        } catch (err) {
+            this.queue.unshift(...batch);
+        } finally {
+            this.isFlushing = false;
+        }
+    },
+
+    flushBeacon() {
+        if (this.queue.length === 0) return;
+        const batch = this.queue.splice(0, 40);
+        const payload = {
+            session_id: this.sessionId,
+            timestamp: new Date().toISOString(),
+            environment: this.environment,
+            events: batch
+        };
+
+        try {
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/api/telemetry', blob);
+            }
+        } catch (e) {
+            this.queue.unshift(...batch);
+        }
+    }
+};
+
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+    TelemetryManager.init();
     initServiceWorker();
     await checkStorageSupport();
     await checkBackendHealth();
@@ -369,13 +510,16 @@ async function startGame() {
         print: (text) => {
             console.log('[ZeroHour-WASM]', text);
             if (DevConsole) DevConsole.write(text);
+            if (TelemetryManager) TelemetryManager.log('info', 'wasm_stdout', text);
         },
         printErr: (text) => {
             console.warn('[ZeroHour-WASM]', text);
             if (DevConsole) DevConsole.write(text, 'log-err');
+            if (TelemetryManager) TelemetryManager.log('warn', 'wasm_stderr', text);
         },
         onRuntimeInitialized: () => {
             console.log('[Captalvo] Runtime WASM inicializado com sucesso.');
+            if (TelemetryManager) TelemetryManager.log('info', 'lifecycle', 'Runtime WASM inicializado com sucesso');
             progressFill.style.width = '100%';
             progressStatus.textContent = 'PRONTO';
             progressDetail.textContent = 'Iniciando simulação...';
@@ -398,6 +542,7 @@ async function startGame() {
         },
         onAbort: (err) => {
             console.error('[Captalvo] Abort:', err);
+            if (TelemetryManager) TelemetryManager.log('fatal', 'wasm_abort', String(err));
             alert('O motor de jogo foi abortado: ' + err);
             progressContainer.style.display = 'none';
         }
@@ -811,7 +956,7 @@ const DevConsole = {
     isOpen: false,
 
     commands: [
-        'help', 'copy', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
+        'help', 'copy', 'sendlogs', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
         'ping', 'capture', 'cursor', 'clear', 'reload', 'close'
     ],
 
@@ -822,6 +967,19 @@ const DevConsole = {
         this.input = document.getElementById('dev-console-input');
 
         if (!this.panel) return;
+
+        // Sync / Send logs to server button in header
+        const btnSync = document.getElementById('btn-console-sync');
+        if (btnSync) {
+            btnSync.addEventListener('click', async () => {
+                const orig = btnSync.textContent;
+                btnSync.textContent = '⏳ Enviando...';
+                await TelemetryManager.flush();
+                this.write(`[Telemetry] Logs sincronizados com o servidor. ID da Sessão: ${TelemetryManager.sessionId}`, 'log-ok');
+                btnSync.textContent = '✅ Enviado!';
+                setTimeout(() => { btnSync.textContent = orig; }, 2000);
+            });
+        }
 
         // Copy button in header
         const btnCopy = document.getElementById('btn-console-copy');
@@ -999,6 +1157,7 @@ const DevConsole = {
             case 'help':
                 this.write(`Comandos disponíveis:
   copy         - Copia todo o histórico de logs do console para a área de transferência
+  sendlogs     - Envia/sincroniza todos os logs do console e telemetria para o servidor
   status       - Exibe resumo em tempo real do motor, áudio, memória e canvas
   diag         - Executa diagnóstico completo de hardware, WebAssembly e rede
   gpu          - Exibe detalhes do adaptador WebGL 2.0 e placa de vídeo
@@ -1012,6 +1171,15 @@ const DevConsole = {
   clear        - Limpa o histórico de mensagens do console
   reload       - Recarrega a aplicação
   close        - Fecha este painel (ou pressione \` ou Esc)`);
+                break;
+
+            case 'sendlogs':
+            case 'synclogs':
+            case 'sync':
+            case 'telemetry':
+                this.write('Enviando logs acumulados para o servidor...', 'log-warn');
+                await TelemetryManager.flush();
+                this.write(`[Telemetry] Logs sincronizados com o servidor com sucesso! ID da Sessão: ${TelemetryManager.sessionId}`, 'log-ok');
                 break;
 
             case 'copy':
@@ -1120,18 +1288,32 @@ API: ${d.net.php} - Latência: ${d.net.latency}`, 'log-ok');
 function initDevConsole() {
     DevConsole.init();
 
-    // Capture global uncaught errors into DevConsole
+    // Capture global uncaught errors into DevConsole & Remote Telemetry
     window.addEventListener('error', (event) => {
+        const msg = `[JS Error] ${event.message} (${event.filename || 'unknown'}:${event.lineno || 0})`;
         if (DevConsole && DevConsole.write) {
-            DevConsole.write(`[JS Error] ${event.message} (${event.filename || 'unknown'}:${event.lineno || 0})`, 'log-err');
+            DevConsole.write(msg, 'log-err');
+        }
+        if (TelemetryManager && TelemetryManager.log) {
+            TelemetryManager.log('error', 'uncaught_error', event.message, {
+                file: event.filename,
+                line: event.lineno,
+                col: event.colno,
+                stack: event.error ? event.error.stack : null
+            });
         }
     });
 
     // Capture unhandled promise rejections
     window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason ? (event.reason.message || event.reason.stack || String(event.reason)) : 'Erro desconhecido';
         if (DevConsole && DevConsole.write) {
-            const reason = event.reason ? (event.reason.message || event.reason.stack || String(event.reason)) : 'Erro desconhecido';
             DevConsole.write(`[Promise Rejection] ${reason}`, 'log-err');
+        }
+        if (TelemetryManager && TelemetryManager.log) {
+            TelemetryManager.log('error', 'unhandled_rejection', reason, {
+                stack: event.reason && event.reason.stack ? event.reason.stack : null
+            });
         }
     });
 
@@ -1140,9 +1322,12 @@ function initDevConsole() {
     console.error = function(...args) {
         origError(...args);
         try {
+            const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
             if (DevConsole && DevConsole.write) {
-                const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
                 DevConsole.write(`[Error] ${text}`, 'log-err');
+            }
+            if (TelemetryManager && TelemetryManager.log) {
+                TelemetryManager.log('error', 'console_error', text);
             }
         } catch (e) {}
     };
@@ -1151,9 +1336,12 @@ function initDevConsole() {
     console.warn = function(...args) {
         origWarn(...args);
         try {
+            const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
             if (DevConsole && DevConsole.write) {
-                const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
                 DevConsole.write(`[Warn] ${text}`, 'log-warn');
+            }
+            if (TelemetryManager && TelemetryManager.log) {
+                TelemetryManager.log('warn', 'console_warn', text);
             }
         } catch (e) {}
     };
