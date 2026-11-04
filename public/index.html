@@ -132,7 +132,7 @@
     })();
     </script>
 
-    <link rel="stylesheet" href="captalvo.css?t=1793750870">
+    <link rel="stylesheet" href="captalvo.css?t=1793751873">
 </head>
 <body>
 
@@ -151,13 +151,17 @@
     <!-- Backtick Developer Diagnostic Console -->
     <div id="dev-console" hidden class="dev-console-panel">
         <div class="dev-console-header">
-            <span>CAPTALVO // DIAGNOSTIC CONSOLE &mdash; (PRESSIONE ` OU ESC PARA FECHAR)</span>
-            <button id="dev-console-close" class="dev-console-close" type="button">&times;</button>
+            <span>CAPTALVO // DIAGNOSTIC CONSOLE &mdash; (PRESSIONE ` OU ESC)</span>
+            <div class="dev-console-actions">
+                <button id="btn-console-copy" class="btn-console-tool" type="button" title="Copiar todos os logs para a área de transferência">📋 Copiar Logs</button>
+                <button id="btn-console-clear" class="btn-console-tool" type="button" title="Limpar histórico do console">🧹 Limpar</button>
+                <button id="dev-console-close" class="dev-console-close" type="button" title="Fechar console">&times;</button>
+            </div>
         </div>
         <pre id="dev-console-output"></pre>
         <form id="dev-console-form" class="dev-console-form">
             <span class="prompt">&gt;</span>
-            <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'status', 'diag', 'gpu', 'vfs'...">
+            <input id="dev-console-input" class="dev-console-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite 'help', 'copy', 'status', 'diag', 'gpu', 'vfs'...">
         </form>
     </div>
 
@@ -514,10 +518,11 @@
     </div>
 
     <!-- Captalvo Interactive Simulation Script -->
-    <script src="captalvo-home-sim.js?t=1793750870"></script>
+    <script src="captalvo-home-sim.js?t=1793751873"></script>
 
     <!-- Captalvo Application Script -->
-    <script src="captalvo-app.js?t=1793750870"></script>
+    <script src="captalvo-app.js?t=1793751873"></script>
 </body>
 </html>
+
 

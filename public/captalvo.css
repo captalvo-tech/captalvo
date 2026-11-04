@@ -824,7 +824,7 @@ canvas#canvas {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 280px;
+  height: 300px;
   background: rgba(7, 10, 9, 0.96);
   border-top: 1px solid var(--accent-gold);
   z-index: 2000;
@@ -832,12 +832,14 @@ canvas#canvas {
   flex-direction: column;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8);
   font-family: var(--font-mono);
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .dev-console-header {
-  padding: 6px 14px;
-  background: rgba(49, 70, 59, 0.4);
-  border-bottom: 1px solid rgba(98, 120, 107, 0.2);
+  padding: 8px 14px;
+  background: rgba(18, 29, 23, 0.9);
+  border-bottom: 1px solid rgba(98, 120, 107, 0.3);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -846,12 +848,37 @@ canvas#canvas {
   letter-spacing: 1px;
 }
 
+.dev-console-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-console-tool {
+  background: rgba(49, 70, 59, 0.5);
+  border: 1px solid rgba(214, 184, 121, 0.35);
+  color: #f3f5f2;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-console-tool:hover {
+  background: var(--accent-gold);
+  color: #070a09;
+}
+
 .dev-console-close {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 20px;
   cursor: pointer;
+  line-height: 1;
 }
 
 .dev-console-close:hover {
@@ -866,6 +893,8 @@ canvas#canvas {
   line-height: 1.4;
   color: #b9c2b6;
   white-space: pre-wrap;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .dev-console-form {

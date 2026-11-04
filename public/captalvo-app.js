@@ -811,7 +811,7 @@ const DevConsole = {
     isOpen: false,
 
     commands: [
-        'help', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
+        'help', 'copy', 'status', 'diag', 'gpu', 'vfs', 'audio', 'mem', 'fps',
         'ping', 'capture', 'cursor', 'clear', 'reload', 'close'
     ],
 
@@ -822,6 +822,27 @@ const DevConsole = {
         this.input = document.getElementById('dev-console-input');
 
         if (!this.panel) return;
+
+        // Copy button in header
+        const btnCopy = document.getElementById('btn-console-copy');
+        if (btnCopy) {
+            btnCopy.addEventListener('click', () => this.copyToClipboard());
+        }
+
+        // Clear button in header
+        const btnClear = document.getElementById('btn-console-clear');
+        if (btnClear) {
+            btnClear.addEventListener('click', () => {
+                this.output.innerHTML = '';
+                this.write('Console limpo.', 'log-ok');
+            });
+        }
+
+        // Close button
+        const btnClose = document.getElementById('dev-console-close');
+        if (btnClose) {
+            btnClose.addEventListener('click', () => this.close());
+        }
 
         // Command submission
         this.form.addEventListener('submit', async (e) => {
@@ -892,6 +913,62 @@ const DevConsole = {
         this.output.scrollTop = this.output.scrollHeight;
     },
 
+    copyToClipboard() {
+        const text = this.output.innerText || this.output.textContent || '';
+        if (!text.trim()) {
+            this.write('Nenhum log disponível para copiar.', 'log-warn');
+            return;
+        }
+
+        const notifySuccess = () => {
+            this.write('✅ Todos os logs foram copiados com sucesso para a sua área de transferência!', 'log-ok');
+            const btn = document.getElementById('btn-console-copy');
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = '✅ Copiado!';
+                btn.style.color = '#2ecc71';
+                setTimeout(() => {
+                    btn.textContent = orig;
+                    btn.style.color = '';
+                }, 2000);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(notifySuccess).catch(() => {
+                this.fallbackCopy(text, notifySuccess);
+            });
+        } else {
+            this.fallbackCopy(text, notifySuccess);
+        }
+    },
+
+    fallbackCopy(text, successCb) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.width = '2em';
+            ta.style.height = '2em';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const success = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (success) {
+                if (successCb) successCb();
+                else this.write('✅ Logs copiados com sucesso!', 'log-ok');
+            } else {
+                this.write('⚠️ Não foi possível copiar automaticamente. Selecione o texto do console e use Ctrl+C.', 'log-warn');
+            }
+        } catch (err) {
+            this.write('⚠️ Selecione o texto no console e pressione Ctrl+C para copiar.', 'log-warn');
+        }
+    },
+
     open() {
         this.panel.hidden = false;
         this.isOpen = true;
@@ -921,6 +998,7 @@ const DevConsole = {
         switch (cmd) {
             case 'help':
                 this.write(`Comandos disponíveis:
+  copy         - Copia todo o histórico de logs do console para a área de transferência
   status       - Exibe resumo em tempo real do motor, áudio, memória e canvas
   diag         - Executa diagnóstico completo de hardware, WebAssembly e rede
   gpu          - Exibe detalhes do adaptador WebGL 2.0 e placa de vídeo
@@ -934,6 +1012,10 @@ const DevConsole = {
   clear        - Limpa o histórico de mensagens do console
   reload       - Recarrega a aplicação
   close        - Fecha este painel (ou pressione \` ou Esc)`);
+                break;
+
+            case 'copy':
+                this.copyToClipboard();
                 break;
 
             case 'status':
@@ -1037,6 +1119,44 @@ API: ${d.net.php} - Latência: ${d.net.latency}`, 'log-ok');
 
 function initDevConsole() {
     DevConsole.init();
+
+    // Capture global uncaught errors into DevConsole
+    window.addEventListener('error', (event) => {
+        if (DevConsole && DevConsole.write) {
+            DevConsole.write(`[JS Error] ${event.message} (${event.filename || 'unknown'}:${event.lineno || 0})`, 'log-err');
+        }
+    });
+
+    // Capture unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+        if (DevConsole && DevConsole.write) {
+            const reason = event.reason ? (event.reason.message || event.reason.stack || String(event.reason)) : 'Erro desconhecido';
+            DevConsole.write(`[Promise Rejection] ${reason}`, 'log-err');
+        }
+    });
+
+    // Mirror console.error & console.warn
+    const origError = console.error.bind(console);
+    console.error = function(...args) {
+        origError(...args);
+        try {
+            if (DevConsole && DevConsole.write) {
+                const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+                DevConsole.write(`[Error] ${text}`, 'log-err');
+            }
+        } catch (e) {}
+    };
+
+    const origWarn = console.warn.bind(console);
+    console.warn = function(...args) {
+        origWarn(...args);
+        try {
+            if (DevConsole && DevConsole.write) {
+                const text = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+                DevConsole.write(`[Warn] ${text}`, 'log-warn');
+            }
+        } catch (e) {}
+    };
 }
 
 // =============================================================================
