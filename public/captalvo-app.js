@@ -907,8 +907,14 @@ async function startGame() {
             progressDetail.textContent = 'Iniciando simulação...';
 
             setTimeout(() => {
-                document.getElementById('captalvo-shell').classList.add('hidden');
-                document.getElementById('game-escape-bar').style.display = 'block';
+                const shell = document.getElementById('captalvo-shell');
+                if (shell) shell.classList.add('hidden');
+                const homeMain = document.getElementById('home-main');
+                if (homeMain) homeMain.style.display = 'none';
+                const gameContainer = document.getElementById('game-container');
+                if (gameContainer) gameContainer.style.display = 'flex';
+                const escapeBar = document.getElementById('game-escape-bar');
+                if (escapeBar) escapeBar.style.display = 'flex';
                 AppState.isGameRunning = true;
             }, 600);
         },

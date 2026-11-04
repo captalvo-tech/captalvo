@@ -41,3 +41,6 @@ node_modules/
 .pack-cache/
 dist/
 build/
+
+storage_last_session.json
+

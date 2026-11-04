@@ -25,3 +25,4 @@ if ($Follow) {
     $res = ssh -p $HostPort "${HostUser}@${HostIp}" "$cmd"
     Write-Host $res
 }
+
