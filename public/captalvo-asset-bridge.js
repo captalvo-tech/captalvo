@@ -25,6 +25,9 @@ class CaptalvoAssetBridge {
             byFile: new Map() // Map<filename, { reads, bytes, hits, misses, latencies: [] }>
         };
 
+        // Unserved Reads Registry (Tracking all unfulfilled sync requests)
+        this.unservedReads = [];
+
         // Alias resolution map
         this.ALIAS_MAP = {
             'englishzh.big': ['brazilianzh.big', 'englishzh.big'],
@@ -219,6 +222,8 @@ class CaptalvoAssetBridge {
 
     /**
      * Synchronous Range Reader called by WASM engine via ki(a, b, c, d)
+     * Rigorously validates offsets and lengths. Never returns incomplete slices.
+     * Registers all unserved reads and avoids any synchronous HTTP fallback.
      * @param {string} rawPath - Requested file path/name
      * @param {number} start - Start byte offset
      * @param {number} end - End byte offset (inclusive)
@@ -228,15 +233,22 @@ class CaptalvoAssetBridge {
         const t0 = performance.now();
         const norm = this.normalizeFilename(rawPath);
         const key = this.resolveFileKey(norm);
+
+        // Rigorous validation of input range
+        if (typeof start !== 'number' || typeof end !== 'number' || isNaN(start) || isNaN(end) || start < 0 || end < start) {
+            console.error(`[CaptalvoBridge] Intervalo inválido solicitado para ${rawPath}: start=${start}, end=${end}`);
+            return null;
+        }
+
         const reqLen = end - start + 1;
-
         let result = null;
-        let source = 'unknown';
+        let source = 'none';
 
-        // 1. Check Adaptive Cache
+        // 1. Check Adaptive RAM Cache
         if (window.CaptalvoAdaptiveCache) {
-            result = window.CaptalvoAdaptiveCache.get(key, start, end);
-            if (result) {
+            const cached = window.CaptalvoAdaptiveCache.get(key, start, end);
+            if (cached && cached.length === reqLen) {
+                result = cached;
                 source = 'ram_cache';
             }
         }
@@ -253,62 +265,62 @@ class CaptalvoAssetBridge {
                     this._transformedSet.add(key);
                 }
             }
-            if (start < buf.length) {
-                const actualEnd = Math.min(end + 1, buf.length);
-                result = buf.subarray(start, actualEnd);
+
+            // Strict boundary validation: requested interval must fit completely inside buffer
+            if (start < buf.length && (end + 1) <= buf.length) {
+                result = buf.subarray(start, end + 1);
                 source = 'preloaded_buffer';
-                // Put into adaptive cache for tracking
-                if (window.CaptalvoAdaptiveCache) {
-                    window.CaptalvoAdaptiveCache.put(key, start, end, result, true);
-                }
+            } else if (start < buf.length) {
+                console.warn(`[CaptalvoBridge] Leitura parcial além do fim de ${key} (${start}-${end}, tamanho buffer: ${buf.length})`);
             }
         }
 
-        // 3. Check Preloaded Header Buffers (first 2 MB)
+        // 3. Check Preloaded Header Buffers (first 2 MB index)
         if (!result && this.preloadedHeaders.has(key)) {
             const headerBuf = this.preloadedHeaders.get(key);
-            if (start < headerBuf.length) {
-                const actualEnd = Math.min(end + 1, headerBuf.length);
-                result = headerBuf.subarray(start, actualEnd);
+            // Strict boundary validation: must fit completely inside header buffer
+            if (start < headerBuf.length && (end + 1) <= headerBuf.length) {
+                result = headerBuf.subarray(start, end + 1);
                 source = 'preloaded_header';
-                if (window.CaptalvoAdaptiveCache) {
-                    window.CaptalvoAdaptiveCache.put(key, start, end, result, true);
-                }
             }
         }
 
-        // 4. Fallback: If running on local server (127.0.0.1 / localhost), try synchronous XHR
-        if (!result && typeof location !== 'undefined' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {
-            try {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', rawPath, false);
-                xhr.setRequestHeader('Range', `bytes=${start}-${end}`);
-                xhr.overrideMimeType('text/plain; charset=x-user-defined');
-                xhr.send(null);
-
-                if (xhr.status === 200 || xhr.status === 206) {
-                    const str = xhr.responseText || '';
-                    const u8 = new Uint8Array(str.length);
-                    for (let i = 0; i < str.length; i++) {
-                        u8[i] = str.charCodeAt(i) & 0xff;
-                    }
-                    result = u8;
-                    source = 'local_xhr';
-                    if (window.CaptalvoAdaptiveCache) {
-                        window.CaptalvoAdaptiveCache.put(key, start, end, result, false);
-                    }
-                }
-            } catch (e) {}
+        // Integrity verification: NEVER return incomplete slice
+        if (result && result.length !== reqLen) {
+            console.error(`[CaptalvoBridge] Inconsistência de tamanho em ${key}: esperado ${reqLen}, obtido ${result.length}. Rejeitando fatia.`);
+            result = null;
         }
 
         const durationMs = performance.now() - t0;
         this.recordMetrics(key, start, reqLen, durationMs, result !== null, source);
 
         if (!result) {
-            console.warn(`[CaptalvoBridge] Recurso ausente na RAM para leitura síncrona: ${norm} (${start}-${end})`);
+            const unserved = {
+                file: key,
+                rawPath,
+                start,
+                end,
+                reqLen,
+                source: 'unserved',
+                timestamp: Date.now()
+            };
+            this.unservedReads.push(unserved);
+            if (this.unservedReads.length > 500) {
+                this.unservedReads.shift();
+            }
+
+            console.warn(`[CaptalvoBridge] Recurso ausente na RAM para leitura síncrona: ${norm} (${start}-${end}, ${reqLen} bytes)`);
+
+            if (window.CaptalvoDiagnostics && window.CaptalvoDiagnostics.recordUnservedRead) {
+                window.CaptalvoDiagnostics.recordUnservedRead(unserved);
+            }
         }
 
         return result;
+    }
+
+    getUnservedReads() {
+        return [...this.unservedReads];
     }
 
     recordMetrics(file, offset, length, durationMs, hit, source) {
@@ -365,6 +377,8 @@ class CaptalvoAssetBridge {
     /**
      * Prepares all required game assets in RAM before starting WebAssembly.
      * Guaranteed to load essential INIs, Window, CSF and headers of all archives.
+     * Selectively and safely preloads Textures.big, TexturesZH.big, W3D.big, W3DZH.big
+     * when memory budget allows, without duplicating buffers or triggering OOM.
      */
     async prepareAssetsForLaunch(mode = 'automatic', progressCb = null) {
         this.storageMode = mode;
@@ -383,7 +397,30 @@ class CaptalvoAssetBridge {
             throw new Error('Nenhum arquivo .big encontrado no armazenamento. Importe os arquivos do Zero Hour antes de iniciar.');
         }
 
-        console.log(`[CaptalvoBridge] Preparando ativos para inicialização no modo '${mode}'. Arquivos catalogados: ${metas.length}`);
+        // Memory Budget Assessment
+        const devMemGB = (typeof navigator !== 'undefined' && navigator.deviceMemory) ? navigator.deviceMemory : 8;
+        const heapLimitBytes = (typeof performance !== 'undefined' && performance.memory && performance.memory.jsHeapSizeLimit)
+            ? performance.memory.jsHeapSizeLimit
+            : 4 * 1024 * 1024 * 1024;
+        const heapLimitMB = Math.round(heapLimitBytes / (1024 * 1024));
+
+        // Policy:
+        // Textures (530 MB): Allowed if Turbo, or if not Economic on systems with >= 8GB RAM or >= 1.5GB Heap Limit
+        // W3D 3D Models (357 MB): Allowed if Turbo, or if not Economic on systems with >= 8GB RAM and >= 2.5GB Heap Limit
+        const canPreloadTextures = (mode === 'turbo') || (mode !== 'economic' && (devMemGB >= 8 || heapLimitMB >= 1500));
+        const canPreloadW3D = (mode === 'turbo') || (mode !== 'economic' && (devMemGB >= 8 && heapLimitMB >= 2500));
+
+        const GRAPHICS_PRELOAD = new Set();
+        if (canPreloadTextures) {
+            GRAPHICS_PRELOAD.add('textureszh.big');
+            GRAPHICS_PRELOAD.add('textures.big');
+        }
+        if (canPreloadW3D) {
+            GRAPHICS_PRELOAD.add('w3dzh.big');
+            GRAPHICS_PRELOAD.add('w3d.big');
+        }
+
+        console.log(`[CaptalvoBridge] Preparando ativos para '${mode}'. RAM: ${devMemGB}GB, Heap: ${heapLimitMB}MB. Preload Texturas: ${canPreloadTextures}, Preload W3D: ${canPreloadW3D}`);
 
         const totalSteps = metas.length;
         let processed = 0;
@@ -392,12 +429,18 @@ class CaptalvoAssetBridge {
         for (const meta of metas) {
             const lower = meta.name.toLowerCase();
             const isEssential = this.ESSENTIAL_FULL_PRELOAD.includes(lower);
+            const isGraphics = GRAPHICS_PRELOAD.has(lower);
 
             processed++;
             const pct = 10 + Math.round((processed / totalSteps) * 80);
 
-            if (isEssential || mode === 'turbo') {
-                if (progressCb) progressCb(`Carregando ${meta.name} em RAM (${(meta.size / (1024 * 1024)).toFixed(1)} MB)...`, pct);
+            if (isEssential || isGraphics || mode === 'turbo') {
+                if (progressCb) {
+                    const mb = (meta.size / (1024 * 1024)).toFixed(1);
+                    const tag = isGraphics ? 'Recurso Gráfico' : 'Núcleo Essencial';
+                    progressCb(`Carregando ${meta.name} (${tag}, ${mb} MB)...`, pct);
+                }
+
                 try {
                     const buffer = await window.CaptalvoAssetManager.readFileBuffer(meta.name);
                     if (buffer) {
@@ -412,27 +455,18 @@ class CaptalvoAssetBridge {
                         }
 
                         this.preloadedBuffers.set(lower, u8);
-                        if (window.CaptalvoAdaptiveCache) {
-                            window.CaptalvoAdaptiveCache.put(lower, 0, u8.length - 1, u8, true);
-                        }
 
                         // Auto-synthesize English counterpart from Brazilian edition
                         if (lower === 'brazilianzh.big') {
                             const engU8 = this.transformToEnglishBig(u8);
                             if (engU8) {
                                 this.preloadedBuffers.set('englishzh.big', engU8);
-                                if (window.CaptalvoAdaptiveCache) {
-                                    window.CaptalvoAdaptiveCache.put('englishzh.big', 0, engU8.length - 1, engU8, true);
-                                }
                                 console.log('[CaptalvoBridge] EnglishZH.big sintetizado para compatibilidade com o motor.');
                             }
                         } else if (lower === 'brazilian.big') {
                             const engU8 = this.transformToEnglishBig(u8);
                             if (engU8) {
                                 this.preloadedBuffers.set('english.big', engU8);
-                                if (window.CaptalvoAdaptiveCache) {
-                                    window.CaptalvoAdaptiveCache.put('english.big', 0, engU8.length - 1, engU8, true);
-                                }
                                 console.log('[CaptalvoBridge] English.big sintetizado para compatibilidade com o motor.');
                             }
                         }
@@ -441,7 +475,7 @@ class CaptalvoAssetBridge {
                     console.warn(`[CaptalvoBridge] Falha ao pré-carregar ${meta.name}:`, e);
                 }
             } else {
-                // For non-essential large archives (Textures, W3D, Audio):
+                // For non-essential large archives (Audio, Speech, Video):
                 // Preload the first 2 MB (contains BIG header and complete file directory table)
                 if (progressCb) progressCb(`Indexando cabeçalhos de ${meta.name}...`, pct);
                 try {
@@ -449,31 +483,9 @@ class CaptalvoAssetBridge {
                     const headerSlice = await window.CaptalvoAssetManager.readFileSlice(meta.name, 0, headerLen - 1);
                     if (headerSlice) {
                         this.preloadedHeaders.set(lower, headerSlice);
-                        if (window.CaptalvoAdaptiveCache) {
-                            window.CaptalvoAdaptiveCache.put(lower, 0, headerSlice.length - 1, headerSlice, true);
-                        }
                     }
                 } catch (e) {
                     console.warn(`[CaptalvoBridge] Falha ao ler cabeçalho de ${meta.name}:`, e);
-                }
-            }
-        }
-
-        // In Turbo or Balanced mode on high-RAM machines, preload core textures and terrain as well
-        if (mode === 'turbo' || mode === 'balanced') {
-            for (const textureName of ['terrainzh.big', 'mapszh.big', 'textureszh.big']) {
-                if (!this.preloadedBuffers.has(textureName)) {
-                    try {
-                        const handle = await window.CaptalvoAssetManager.getFileHandle(textureName);
-                        if (handle) {
-                            const file = await handle.getFile();
-                            if (file.size <= 250 * 1024 * 1024) { // Up to 250 MB
-                                if (progressCb) progressCb(`Carregando ${textureName} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`, 92);
-                                const buf = await file.arrayBuffer();
-                                this.preloadedBuffers.set(textureName, new Uint8Array(buf));
-                            }
-                        }
-                    } catch (e) {}
                 }
             }
         }
@@ -483,9 +495,6 @@ class CaptalvoAssetBridge {
             const engU8 = this.transformToEnglishBig(this.preloadedBuffers.get('brazilianzh.big'));
             if (engU8) {
                 this.preloadedBuffers.set('englishzh.big', engU8);
-                if (window.CaptalvoAdaptiveCache) {
-                    window.CaptalvoAdaptiveCache.put('englishzh.big', 0, engU8.length - 1, engU8, true);
-                }
                 console.log('[CaptalvoBridge] EnglishZH.big garantido em RAM a partir de BrazilianZH.big.');
             }
         }
@@ -493,9 +502,6 @@ class CaptalvoAssetBridge {
             const engU8 = this.transformToEnglishBig(this.preloadedBuffers.get('brazilian.big'));
             if (engU8) {
                 this.preloadedBuffers.set('english.big', engU8);
-                if (window.CaptalvoAdaptiveCache) {
-                    window.CaptalvoAdaptiveCache.put('english.big', 0, engU8.length - 1, engU8, true);
-                }
                 console.log('[CaptalvoBridge] English.big garantido em RAM a partir de Brazilian.big.');
             }
         }
@@ -511,8 +517,28 @@ class CaptalvoAssetBridge {
             console.warn('[CaptalvoBridge] AVISO: WindowZH.big não está pré-carregado!');
         }
 
+        // Verification probe for Textures.big (297433560-297521095)
+        if (this.preloadedBuffers.has('textures.big')) {
+            const testSlice = this.readRangeSync('textures.big', 297433560, 297521095);
+            if (testSlice && testSlice.length === 87536 && testSlice[0] === 0x44 && testSlice[1] === 0x44 && testSlice[2] === 0x53 && testSlice[3] === 0x20) {
+                console.log('[CaptalvoBridge] Verificação de integridade: Textures.big (297433560-297521095) validado com sucesso (DDS magic, 87,536 bytes).');
+            } else {
+                console.warn('[CaptalvoBridge] AVISO: Falha na validação do intervalo de Textures.big!');
+            }
+        }
+
+        // Calculate total preloaded RAM footprint
+        let totalRAMBytes = 0;
+        for (const buf of this.preloadedBuffers.values()) {
+            totalRAMBytes += buf.byteLength;
+        }
+        for (const hBuf of this.preloadedHeaders.values()) {
+            totalRAMBytes += hBuf.byteLength;
+        }
+        const totalRAMMB = (totalRAMBytes / (1024 * 1024)).toFixed(1);
+
         if (progressCb) progressCb('Ponte de arquivos pronta. Inicializando motor...', 100);
-        console.log(`[CaptalvoBridge] Preparação concluída. ${this.preloadedBuffers.size} arquivos completos e ${this.preloadedHeaders.size} cabeçalhos em RAM.`);
+        console.log(`[CaptalvoBridge] Preparação concluída. ${this.preloadedBuffers.size} arquivos completos e ${this.preloadedHeaders.size} cabeçalhos em RAM (${totalRAMMB} MB total alocados).`);
         return true;
     }
 
@@ -550,6 +576,7 @@ class CaptalvoAssetBridge {
             hitRatePercent: parseFloat(hitRate),
             preloadedFullCount: this.preloadedBuffers.size,
             preloadedHeaderCount: this.preloadedHeaders.size,
+            unservedReadsCount: this.unservedReads.length,
             fileRanking
         };
     }

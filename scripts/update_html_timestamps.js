@@ -23,3 +23,4 @@ for (const f of files) {
 
 fs.writeFileSync(indexHtmlPath, html, 'utf8');
 console.log(`Updated index.html with timestamp t=${ts} for all ${files.length} assets.`);
+

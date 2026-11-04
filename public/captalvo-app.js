@@ -980,6 +980,15 @@ async function startGame() {
         preRun: [
             function(mod) {
                 console.log('[Captalvo] Executando preRun da engine...');
+                const homeMain = document.getElementById('home-main');
+                if (homeMain) homeMain.style.display = 'none';
+                const gameContainer = document.getElementById('game-container');
+                if (gameContainer) gameContainer.style.display = 'flex';
+                const canvas = document.getElementById('canvas');
+                if (canvas) {
+                    canvas.focus();
+                    canvas.addEventListener('mousedown', () => canvas.focus());
+                }
                 const theFS = (mod && mod.FS) || (window.Module && window.Module.FS);
                 injectCSFTable(theFS, 'preRun');
             }
@@ -1003,17 +1012,15 @@ async function startGame() {
             progressStatus.textContent = 'PRONTO';
             progressDetail.textContent = 'Iniciando simulação...';
 
-            setTimeout(() => {
-                const shell = document.getElementById('captalvo-shell');
-                if (shell) shell.classList.add('hidden');
-                const homeMain = document.getElementById('home-main');
-                if (homeMain) homeMain.style.display = 'none';
-                const gameContainer = document.getElementById('game-container');
-                if (gameContainer) gameContainer.style.display = 'flex';
-                const escapeBar = document.getElementById('game-escape-bar');
-                if (escapeBar) escapeBar.style.display = 'flex';
-                AppState.isGameRunning = true;
-            }, 600);
+            const homeMain = document.getElementById('home-main');
+            if (homeMain) homeMain.style.display = 'none';
+            const gameContainer = document.getElementById('game-container');
+            if (gameContainer) gameContainer.style.display = 'flex';
+            const escapeBar = document.getElementById('game-escape-bar');
+            if (escapeBar) escapeBar.style.display = 'flex';
+            const canvas = document.getElementById('canvas');
+            if (canvas) canvas.focus();
+            AppState.isGameRunning = true;
         },
         setStatus: (text) => {
             if (text) {

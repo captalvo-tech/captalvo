@@ -107,8 +107,52 @@ function runBridgeTests() {
         console.log('✓ Automatic synthesis of EnglishZH.big and CSF string table extraction verified.');
     }
 
+    // 9. Strict Range, Rejection of Incomplete Slices & Unserved Reads Registry
+    bridge.preloadedBuffers.set('small.big', new Uint8Array(100));
+    const badRange = bridge.readRangeSync('small.big', 80, 120); // only 20 bytes available, requested 41
+    assert.strictEqual(badRange, null);
+    const unserved = bridge.getUnservedReads();
+    assert.strictEqual(unserved.length >= 2, true);
+    const lastUnserved = unserved[unserved.length - 1];
+    assert.strictEqual(lastUnserved.file, 'small.big');
+    assert.strictEqual(lastUnserved.start, 80);
+    assert.strictEqual(lastUnserved.end, 120);
+    assert.strictEqual(lastUnserved.reqLen, 41);
+    console.log('✓ Strict boundary validation and unserved reads tracking verified.');
+
+    // 10. Real Textures.big DDS Texture Range Verification (297433560-297521095)
+    const texturePaths = [
+        'C:/Users/VIOLI/Command and Conquer Generals Zero Hour/Command and Conquer Generals/Textures.big',
+        'C:/Users/VIOLI/Captalvo_NVMe_Assets/Textures.big'
+    ];
+    let realTexPath = null;
+    for (const p of texturePaths) {
+        if (fs.existsSync(p)) {
+            realTexPath = p;
+            break;
+        }
+    }
+    if (realTexPath) {
+        const texBuf = fs.readFileSync(realTexPath);
+        bridge.preloadedBuffers.set('textures.big', new Uint8Array(texBuf));
+
+        const texSlice = bridge.readRangeSync('textures.big', 297433560, 297521095);
+        assert.notStrictEqual(texSlice, null);
+        assert.strictEqual(texSlice.length, 87536);
+        // Magic 'DDS '
+        assert.strictEqual(texSlice[0], 0x44);
+        assert.strictEqual(texSlice[1], 0x44);
+        assert.strictEqual(texSlice[2], 0x53);
+        assert.strictEqual(texSlice[3], 0x20);
+        // DDS header size 124 (0x7C)
+        assert.strictEqual(texSlice[4], 0x7C);
+        assert.strictEqual(texSlice[5], 0x00);
+        console.log('✓ Real Textures.big tbbib.dds texture (87,536 bytes, DDS magic) verified through bridge.');
+    }
+
     return true;
 }
+
 
 if (require.main === module) {
     runBridgeTests();
