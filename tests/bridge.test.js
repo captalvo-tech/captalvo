@@ -1,0 +1,94 @@
+// ==============================================================================
+// TEST: Captalvo Asset Bridge
+// ==============================================================================
+
+const assert = require('assert');
+const fs = require('fs');
+const CaptalvoAssetBridge = require('../public/captalvo-asset-bridge.js');
+const CaptalvoAdaptiveCache = require('../public/captalvo-cache.js');
+
+function runBridgeTests() {
+    console.log('\n--- Running Asset Bridge Tests ---');
+    global.window = {
+        CaptalvoAdaptiveCache: new CaptalvoAdaptiveCache()
+    };
+
+    const bridge = new CaptalvoAssetBridge();
+
+    // 1. Preload synthetic BIG archive
+    // BIG Header format: 4 bytes magic, 4 bytes size LE, 4 bytes numFiles BE, 4 bytes headerSize BE
+    const syntheticHeader = Buffer.alloc(16);
+    syntheticHeader.write('BIGF', 0, 4, 'ascii');
+    syntheticHeader.writeUInt32LE(1024, 4);   // Total size 1024
+    syntheticHeader.writeUInt32BE(1, 8);      // 1 file
+    syntheticHeader.writeUInt32BE(64, 12);    // Header size 64
+
+    const fullSyntheticArchive = Buffer.concat([syntheticHeader, Buffer.alloc(1024 - 16, 0xAA)]);
+    bridge.preloadedBuffers.set('ini.big', new Uint8Array(fullSyntheticArchive));
+
+    // 2. Read first 16 bytes
+    const first16 = bridge.readRangeSync('INI.big', 0, 15);
+    assert.notStrictEqual(first16, null);
+    assert.strictEqual(first16.length, 16);
+
+    const magic = String.fromCharCode(...first16.subarray(0, 4));
+    assert.strictEqual(magic, 'BIGF');
+    console.log('✓ Synchronous reading of first 16 bytes with BIGF magic verified.');
+
+    // 3. Case-insensitivity and relative path handling
+    const sliceA = bridge.readRangeSync('assets/ini.big', 0, 15);
+    const sliceB = bridge.readRangeSync('/assets/INI.BIG', 0, 15);
+    const sliceC = bridge.readRangeSync('Data\\INI\\ini.big', 0, 15);
+    assert.deepStrictEqual(sliceA, first16);
+    assert.deepStrictEqual(sliceB, first16);
+    assert.deepStrictEqual(sliceC, first16);
+    console.log('✓ Path normalization, slashes, and case-insensitivity verified.');
+
+    // 4. Localization alias resolution
+    bridge.preloadedBuffers.set('brazilianzh.big', new Uint8Array([0x42, 0x49, 0x47, 0x46, 0x99]));
+    const aliasRes = bridge.readRangeSync('EnglishZH.big', 0, 4);
+    assert.notStrictEqual(aliasRes, null);
+    assert.strictEqual(aliasRes[0], 0x42);
+    assert.strictEqual(aliasRes[4], 0x99);
+    console.log('✓ Localization alias resolution (EnglishZH.big -> BrazilianZH.big) verified.');
+
+    // 5. Missing file handling (must return null, never throw or hang)
+    const missing = bridge.readRangeSync('non_existent.big', 0, 15);
+    assert.strictEqual(missing, null);
+    console.log('✓ Missing file gracefully detected (returns null, no hang, no uncaught error).');
+
+    // 6. Metrics & Ranking
+    const stats = bridge.getStats();
+    assert.strictEqual(stats.totalReads >= 5, true);
+    assert.strictEqual(stats.cacheHits >= 4, true);
+    assert.strictEqual(stats.fileRanking.length >= 2, true);
+    assert.strictEqual(typeof stats.fileRanking[0].latencyP50, 'number');
+    console.log('✓ Bridge metrics, read latencies, and file ranking table verified.');
+
+    // 7. Verify Real NVMe Assets if available
+    const realIniPath = 'C:/Users/VIOLI/Captalvo_NVMe_Assets/ZH_Generals/INI.big';
+    if (fs.existsSync(realIniPath)) {
+        if (global.window && global.window.CaptalvoAdaptiveCache) {
+            global.window.CaptalvoAdaptiveCache.clear();
+        }
+        const realBuf = fs.readFileSync(realIniPath);
+        bridge.preloadedBuffers.set('ini.big', new Uint8Array(realBuf));
+
+        const realFirst16 = bridge.readRangeSync('INI.big', 0, 15);
+        assert.strictEqual(realFirst16.length, 16);
+        const realMagic = String.fromCharCode(...realFirst16.subarray(0, 4));
+        assert.strictEqual(realMagic, 'BIGF');
+
+        const realHeader = Buffer.from(realFirst16);
+        assert.strictEqual(realHeader.readUInt32LE(4), 7607479);
+        console.log('✓ Real user NVMe asset INI.big (7,607,479 bytes) verified through bridge.');
+    }
+
+    return true;
+}
+
+if (require.main === module) {
+    runBridgeTests();
+}
+
+module.exports = runBridgeTests;

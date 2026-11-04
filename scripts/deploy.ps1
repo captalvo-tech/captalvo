@@ -57,8 +57,8 @@ if (Test-Path $indexHtmlPath) {
 $tempTarApp = Join-Path $ProjectRoot "captalvo_app.tar.gz"
 $tempTarPublic = Join-Path $ProjectRoot "captalvo_public.tar.gz"
 
-tar.exe -czf "$tempTarApp" -C "$AppDir" .
-tar.exe -czf "$tempTarPublic" -C "$PublicDir" .
+tar.exe --exclude="*.log" -czf "$tempTarApp" -C "$AppDir" .
+tar.exe --exclude="*.bak" --exclude="*.tmp" -czf "$tempTarPublic" -C "$PublicDir" .
 
 scp -P $HostPort "$tempTarApp" "${HostUser}@${HostIp}:/home/$HostUser/staging_captalvo/captalvo_app.tar.gz"
 scp -P $HostPort "$tempTarPublic" "${HostUser}@${HostIp}:/home/$HostUser/staging_captalvo/captalvo_public.tar.gz"
@@ -88,6 +88,9 @@ Write-Host "    $applyRes" -ForegroundColor Green
 Write-Host "==> [6/6] Validando produção live (HTTPS, Anti-Cache & Health Endpoint)..."
 $healthCheck = curl.exe -s https://captalvo.online/api/health
 Write-Host "    Resposta /api/health: $healthCheck" -ForegroundColor Cyan
+
+$telemetryCheck = curl.exe -s "https://captalvo.online/api/telemetry?action=stats"
+Write-Host "    Resposta /api/telemetry?action=stats: $telemetryCheck" -ForegroundColor Cyan
 
 $httpStatus = (curl.exe -s -o /dev/null -w "%{http_code}" https://captalvo.online)
 Write-Host "    Status HTTP captalvo.online: $httpStatus" -ForegroundColor Green

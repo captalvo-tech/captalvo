@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
     let reqPath = decodeURIComponent(req.url.split('?')[0]);
     if (reqPath === '/') reqPath = '/index.html';
 
-    // Mock API health for local dev
+    // Mock API health & telemetry for local dev
     if (reqPath === '/api/health') {
         res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -39,6 +39,18 @@ const server = http.createServer((req, res) => {
             php_version: '8.3-mock',
             engine: 'Command & Conquer: Generals Zero Hour (WASM)',
             timestamp: new Date().toISOString()
+        }));
+    }
+
+    if (reqPath === '/api/telemetry') {
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        });
+        return res.end(JSON.stringify({
+            success: true,
+            message: 'Telemetry logged (local dev mock)',
+            received_at: new Date().toISOString()
         }));
     }
 

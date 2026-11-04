@@ -5,23 +5,53 @@
 
 'use strict';
 
-const REQUIRED_ASSETS = [
-    { name: 'INIZH.big', desc: 'Configuração Zero Hour', required: true },
-    { name: 'TexturesZH.big', desc: 'Texturas Zero Hour', required: true },
-    { name: 'W3DZH.big', desc: 'Modelos 3D Zero Hour', required: true },
-    { name: 'WindowZH.big', desc: 'Interface e Telas ZH', required: true },
-    { name: 'MapsZH.big', desc: 'Mapas Zero Hour', required: true },
-    { name: 'TerrainZH.big', desc: 'Texturas de Terreno ZH', required: true },
-    { name: 'ShadersZH.big', desc: 'Shaders Zero Hour', required: true },
-    { name: 'PatchINI.big', desc: 'Patches de Inicialização', required: true },
-    { name: 'INI.big', desc: 'Configuração Base', required: false },
-    { name: 'Textures.big', desc: 'Texturas Base', required: false },
-    { name: 'W3D.big', desc: 'Modelos 3D Base', required: false },
-    { name: 'maps.big', desc: 'Mapas Base', required: false },
-    { name: 'Window.big', desc: 'Interface Base', required: false },
-    { name: 'Terrain.big', desc: 'Terreno Base', required: false },
-    { name: 'shaders.big', desc: 'Shaders Base', required: false },
+// Complete Authentic 33-File Catalog of Command & Conquer Generals + Zero Hour
+const ALL_ZH_ASSETS = [
+    // Zero Hour Core
+    { name: 'INIZH.big', desc: 'Configurações Zero Hour', category: 'ZH Core', required: true },
+    { name: 'WindowZH.big', desc: 'Interface e Telas ZH', category: 'ZH Core', required: true },
+    { name: 'ShadersZH.big', desc: 'Shaders Zero Hour', category: 'ZH Core', required: true },
+    { name: 'PatchINI.big', desc: 'Patches de Inicialização', category: 'ZH Core', required: true },
+    { name: 'PatchWindow.big', desc: 'Patches de Interface ZH', category: 'ZH Core', required: false },
+    { name: 'PatchZH.big', desc: 'Patches Zero Hour', category: 'ZH Core', required: false },
+    { name: 'gensecZH.big', desc: 'Segurança Zero Hour', category: 'ZH Core', required: false },
+
+    // Zero Hour Media
+    { name: 'TexturesZH.big', desc: 'Texturas Zero Hour', category: 'ZH Media', required: true },
+    { name: 'W3DZH.big', desc: 'Modelos 3D Zero Hour', category: 'ZH Media', required: true },
+    { name: 'TerrainZH.big', desc: 'Terreno Zero Hour', category: 'ZH Media', required: true },
+    { name: 'MapsZH.big', desc: 'Mapas Zero Hour', category: 'ZH Media', required: true },
+    { name: 'AudioZH.big', desc: 'Áudio Zero Hour', category: 'ZH Media', required: false },
+    { name: 'MusicZH.big', desc: 'Trilha Sonora ZH', category: 'ZH Media', required: false },
+    { name: 'SpeechZH.big', desc: 'Falas Gerais ZH', category: 'ZH Media', required: false },
+
+    // Zero Hour Localized
+    { name: 'BrazilianZH.big', alt: 'EnglishZH.big', desc: 'Textos e Catálogo CSF ZH', category: 'ZH Localized', required: true },
+    { name: 'AudioBrazilianZH.big', alt: 'AudioEnglishZH.big', desc: 'Áudio Localizado ZH', category: 'ZH Localized', required: false },
+    { name: 'SpeechBrazilianZH.big', alt: 'SpeechEnglishZH.big', desc: 'Falas Localizadas ZH', category: 'ZH Localized', required: false },
+    { name: 'W3DBrazilianZH.big', alt: 'W3DEnglishZH.big', desc: 'Modelos Localizados ZH', category: 'ZH Localized', required: false },
+
+    // Generals Base Core
+    { name: 'INI.big', desc: 'Configurações Base', category: 'Base Core', required: false },
+    { name: 'Window.big', desc: 'Interface Base', category: 'Base Core', required: false },
+    { name: 'shaders.big', desc: 'Shaders Base', category: 'Base Core', required: false },
+    { name: 'Patch.big', desc: 'Patches Base', category: 'Base Core', required: false },
+    { name: 'gensec.big', desc: 'Segurança Base', category: 'Base Core', required: false },
+    { name: 'Brazilian.big', alt: 'English.big', desc: 'Textos CSF Base', category: 'Base Core', required: false },
+
+    // Generals Base Media
+    { name: 'Textures.big', desc: 'Texturas Base', category: 'Base Media', required: false },
+    { name: 'W3D.big', desc: 'Modelos 3D Base', category: 'Base Media', required: false },
+    { name: 'Terrain.big', desc: 'Terreno Base', category: 'Base Media', required: false },
+    { name: 'maps.big', desc: 'Mapas Base', category: 'Base Media', required: false },
+    { name: 'Audio.big', desc: 'Áudio Base', category: 'Base Media', required: false },
+    { name: 'AudioBrazilian.big', alt: 'AudioEnglish.big', desc: 'Áudio Localizado Base', category: 'Base Media', required: false },
+    { name: 'Speech.big', desc: 'Falas Base', category: 'Base Media', required: false },
+    { name: 'SpeechBrazilian.big', alt: 'SpeechEnglish.big', desc: 'Falas Localizadas Base', category: 'Base Media', required: false },
+    { name: 'Music.big', desc: 'Trilha Sonora Base', category: 'Base Media', required: false }
 ];
+
+const REQUIRED_ASSETS = ALL_ZH_ASSETS;
 
 const LOCALIZATION_VARIANTS = [
     { target: 'EnglishZH.big', alternatives: ['BrazilianZH.big', 'brazilianzh.big', 'englishzh.big'] },
@@ -883,6 +913,26 @@ async function startGame() {
 
     progressContainer.style.display = 'block';
     progressFill.style.width = '10%';
+    progressStatus.textContent = 'PREPARANDO PONTE DE ARQUIVOS (RAM & OPFS)';
+    progressDetail.textContent = 'Verificando integridade e montando cache...';
+
+    // 1. Prepare assets in RAM bridge before WASM initializes
+    if (window.CaptalvoAssetBridge) {
+        const modeSelect = document.getElementById('select-storage-mode');
+        const storageMode = (modeSelect && modeSelect.value) || 'automatic';
+        try {
+            await window.CaptalvoAssetBridge.prepareAssetsForLaunch(storageMode, (label, pct) => {
+                progressDetail.textContent = label;
+                progressFill.style.width = `${pct}%`;
+            });
+        } catch (bridgeErr) {
+            console.error('[Captalvo] Erro na ponte de ativos:', bridgeErr);
+            alert('Falha ao preparar arquivos do jogo: ' + bridgeErr.message);
+            progressContainer.style.display = 'none';
+            return;
+        }
+    }
+
     progressStatus.textContent = 'INICIALIZANDO MOTOR WEBASSEMBLY';
     progressDetail.textContent = 'Carregando binários do Zero Hour...';
 
@@ -976,7 +1026,329 @@ async function startGame() {
 // -----------------------------------------------------------------------------
 // UI Event Handlers & Modals
 // -----------------------------------------------------------------------------
+
+// =============================================================================
+// CAPTALVO GAME FILES MANAGER UI (Section 4.3 & 12)
+// Works independently of the WASM engine
+// =============================================================================
+async function renderGameFilesManager() {
+    if (!window.CaptalvoAssetManager) return;
+    await window.CaptalvoAssetManager.init();
+
+    // 1. Update Storage Quota Banner
+    const quota = await window.CaptalvoAssetManager.getStorageQuota();
+    const quotaEl = document.getElementById('gf-quota-val');
+    const usedEl = document.getElementById('gf-used-val');
+    const persistedEl = document.getElementById('gf-persisted-val');
+    const ramCacheEl = document.getElementById('gf-ram-cache-val');
+
+    if (quotaEl) quotaEl.textContent = quota.totalGB ? `${quota.totalGB} GB` : 'Ilimitado';
+    if (usedEl) usedEl.textContent = quota.usedMB ? `${quota.usedMB} MB` : '--';
+    if (persistedEl) {
+        persistedEl.textContent = quota.persisted ? '✓ Persistente' : 'Padrão (Volátil)';
+        persistedEl.className = `status-badge ${quota.persisted ? 'badge-ready' : 'badge-info'}`;
+    }
+
+    if (ramCacheEl && window.CaptalvoAdaptiveCache) {
+        const cStats = window.CaptalvoAdaptiveCache.getStats();
+        ramCacheEl.textContent = `${cStats.usedMB} MB / ${cStats.maxMB} MB (${cStats.usagePercent}%)`;
+    }
+
+    // 2. Populate Files Table
+    const tbody = document.getElementById('game-files-table-body');
+    if (!tbody) return;
+
+    const metas = await window.CaptalvoAssetManager.listAllMeta();
+    const metaMap = new Map();
+    for (const m of metas) {
+        metaMap.set(m.name.toLowerCase(), m);
+    }
+
+    tbody.innerHTML = '';
+
+    for (const asset of ALL_ZH_ASSETS) {
+        const lower = asset.name.toLowerCase();
+        let meta = metaMap.get(lower);
+
+        // Check alternative if localized
+        if (!meta && asset.alt) {
+            meta = metaMap.get(asset.alt.toLowerCase());
+        }
+
+        const isPreloaded = window.CaptalvoAssetBridge && window.CaptalvoAssetBridge.preloadedBuffers.has(lower);
+        const hasHeader = window.CaptalvoAssetBridge && window.CaptalvoAssetBridge.preloadedHeaders.has(lower);
+
+        let ramBadge = '<span style="color:var(--muted);">OPFS</span>';
+        if (isPreloaded) {
+            ramBadge = '<span class="status-badge badge-ready">✓ RAM Total</span>';
+        } else if (hasHeader) {
+            ramBadge = '<span class="status-badge badge-info">Cabeçalho</span>';
+        }
+
+        const tr = document.createElement('tr');
+        if (meta) {
+            const sizeMB = (meta.size / (1024 * 1024)).toFixed(2);
+            const shaShort = meta.sha256 ? meta.sha256.substring(0, 12) + '...' : '--';
+            const magicCheck = meta.isValidMagic ? '<span style="color:var(--accent-emerald);">✓ BIGF</span>' : '<span style="color:var(--accent-red);">✗ Incompatível</span>';
+
+            tr.innerHTML = `
+                <td><strong>${meta.name}</strong><br><small style="color:var(--muted);">${asset.desc}</small></td>
+                <td><span class="status-badge badge-info">${asset.category}</span></td>
+                <td>${sizeMB} MB</td>
+                <td><code title="${meta.sha256}">${shaShort}</code> <button class="btn-table-action" onclick="navigator.clipboard.writeText('${meta.sha256}')" title="Copiar Hash">📋</button></td>
+                <td>${magicCheck}</td>
+                <td>${ramBadge}</td>
+                <td>
+                    <button class="btn-table-action" onclick="exportSingleAsset('${meta.name}')">Exportar</button>
+                    <button class="btn-table-action btn-danger" onclick="deleteSingleAsset('${meta.name}')">Excluir</button>
+                </td>
+            `;
+        } else {
+            tr.innerHTML = `
+                <td><strong>${asset.name}</strong><br><small style="color:var(--muted);">${asset.desc}</small></td>
+                <td><span class="status-badge badge-info">${asset.category}</span></td>
+                <td style="color:var(--muted);">--</td>
+                <td style="color:var(--muted);">--</td>
+                <td><span style="color:var(--accent-red);">${asset.required ? '✗ Obrigatório' : 'Pendente'}</span></td>
+                <td>--</td>
+                <td>
+                    <button class="btn-table-action" onclick="document.getElementById('file-input-fallback').click()">Importar</button>
+                </td>
+            `;
+        }
+        tbody.appendChild(tr);
+    }
+}
+
+// Global actions for file table
+window.exportSingleAsset = async function(filename) {
+    if (window.CaptalvoAssetManager) {
+        await window.CaptalvoAssetManager.exportAsset(filename);
+    }
+};
+
+window.deleteSingleAsset = async function(filename) {
+    if (confirm(`Deseja realmente excluir ${filename} do armazenamento local?`)) {
+        if (window.CaptalvoAssetManager) {
+            await window.CaptalvoAssetManager.deleteAsset(filename);
+            await refreshInstalledAssets();
+            await renderGameFilesManager();
+        }
+    }
+};
+
+// =============================================================================
+// ADMIN DIAGNOSTICS DASHBOARD & TABS (Section 11)
+// =============================================================================
+async function renderAdminDiagnostics() {
+    // 1. Overview card stats
+    if (CaptalvoDiagnostics) {
+        const sessEl = document.getElementById('diag-sess-id-val');
+        if (sessEl) sessEl.textContent = CaptalvoDiagnostics.sessionId;
+    }
+
+    // 2. Populate File Ranking Table
+    renderFileRankingTable();
+
+    // 3. Load Remote Sessions from Backend API
+    renderSessionsHistory();
+}
+
+function renderFileRankingTable() {
+    const tbody = document.getElementById('diag-ranking-table-body');
+    if (!tbody || !window.CaptalvoDiagnostics) return;
+
+    const ranking = window.CaptalvoDiagnostics.getFileRanking();
+    if (ranking.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--muted);">Nenhuma leitura registrada nesta sessão ainda.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    for (const row of ranking) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${row.file}</strong></td>
+            <td>${row.reads.toLocaleString()}</td>
+            <td>${row.bytesMB} MB</td>
+            <td><span class="status-badge ${row.hitPercent >= 80 ? 'badge-ready' : 'badge-info'}">${row.hitPercent}%</span></td>
+            <td>${row.latencyP50} ms</td>
+            <td>${row.latencyP95} ms</td>
+            <td>${row.totalWaitMs} ms</td>
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
+async function renderSessionsHistory() {
+    const container = document.getElementById('diag-sessions-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="color:var(--muted); font-size:12px;">Carregando histórico do servidor...</div>';
+
+    try {
+        const res = await fetch('/api/telemetry?action=stats');
+        if (!res.ok) throw new Error('Status ' + res.status);
+        const data = await res.json();
+
+        if (!data || !data.summary) {
+            container.innerHTML = '<div style="color:var(--muted); font-size:12px;">Nenhum registro de sessão no servidor.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="storage-summary-banner" style="margin-bottom:10px;">
+                <div class="storage-sum-item"><span class="storage-sum-label">Total Sessões:</span><span class="storage-sum-val">${data.summary.total_sessions}</span></div>
+                <div class="storage-sum-item"><span class="storage-sum-label">Total Leituras:</span><span class="storage-sum-val">${data.summary.total_reads}</span></div>
+                <div class="storage-sum-item"><span class="storage-sum-label">Tráfego Logs:</span><span class="storage-sum-val">${data.summary.storage_logs_mb} MB</span></div>
+            </div>
+            <div style="font-size:12px; margin-bottom:8px;"><strong>Erros Recentes Reportados pelo Motor:</strong></div>
+        `;
+
+        if (data.recent_errors && data.recent_errors.length > 0) {
+            for (const err of data.recent_errors) {
+                const item = document.createElement('div');
+                item.style.cssText = 'background:rgba(201,74,74,0.12); border-left:3px solid var(--accent-red); padding:6px 10px; font-size:11px; margin-bottom:4px; font-family:var(--font-mono);';
+                item.innerHTML = `<strong>[${err.level.toUpperCase()}] ${err.category}</strong> - ${err.message} <small style="color:var(--muted);">(${err.time})</small>`;
+                container.appendChild(item);
+            }
+        } else {
+            const noErr = document.createElement('div');
+            noErr.style.cssText = 'color:var(--accent-emerald); font-size:11px;';
+            noErr.textContent = '✓ Nenhum erro crítico recente nas últimas sessões.';
+            container.appendChild(noErr);
+        }
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--muted); font-size:11px;">Servidor local ou endpoint de estatísticas offline (${e.message}).</div>`;
+    }
+}
+
 function setupUIEventListeners() {
+    // Game Files Manager Modal
+    const btnDockFiles = document.getElementById('btn-dock-files');
+    if (btnDockFiles) {
+        btnDockFiles.addEventListener('click', async () => {
+            openModal('modal-game-files');
+            await renderGameFilesManager();
+        });
+    }
+
+    const btnOpenGameFiles = document.getElementById('btn-open-game-files');
+    if (btnOpenGameFiles) {
+        btnOpenGameFiles.addEventListener('click', async () => {
+            openModal('modal-game-files');
+            await renderGameFilesManager();
+        });
+    }
+
+    // Storage Mode Selector
+    const selectStorageMode = document.getElementById('select-storage-mode');
+    if (selectStorageMode && window.CaptalvoAdaptiveCache) {
+        selectStorageMode.value = window.CaptalvoAdaptiveCache.currentMode;
+        selectStorageMode.addEventListener('change', (e) => {
+            window.CaptalvoAdaptiveCache.setMode(e.target.value);
+            if (DevConsole) DevConsole.write(`[StorageMode] Modo alterado para: ${e.target.value.toUpperCase()}`);
+        });
+    }
+
+    // Game Files Toolbar Actions
+    const gfBtnImportFolder = document.getElementById('gf-btn-import-folder');
+    if (gfBtnImportFolder) {
+        gfBtnImportFolder.addEventListener('click', async () => {
+            await handleDirectoryImport();
+            await renderGameFilesManager();
+        });
+    }
+
+    const gfBtnImportFiles = document.getElementById('gf-btn-import-files');
+    if (gfBtnImportFiles) {
+        gfBtnImportFiles.addEventListener('click', () => {
+            document.getElementById('file-input-fallback').click();
+        });
+    }
+
+    const gfBtnVerifyAll = document.getElementById('gf-btn-verify-all');
+    if (gfBtnVerifyAll) {
+        gfBtnVerifyAll.addEventListener('click', async () => {
+            const pWrap = document.getElementById('gf-progress-wrap');
+            const pBar = document.getElementById('gf-progress-bar');
+            const pDetail = document.getElementById('gf-progress-detail');
+            if (pWrap) pWrap.style.display = 'block';
+
+            if (window.CaptalvoAssetManager) {
+                pDetail.textContent = 'Verificando integridade e hashes dos arquivos .big...';
+                await window.CaptalvoAssetManager.syncCatalogWithOPFS();
+            }
+
+            if (pWrap) pWrap.style.display = 'none';
+            await renderGameFilesManager();
+            alert('Verificação de integridade concluída com sucesso.');
+        });
+    }
+
+    const gfBtnClearRam = document.getElementById('gf-btn-clear-ram');
+    if (gfBtnClearRam) {
+        gfBtnClearRam.addEventListener('click', () => {
+            if (window.CaptalvoAdaptiveCache) {
+                window.CaptalvoAdaptiveCache.clearNonPinned();
+                renderGameFilesManager();
+                alert('Cache em RAM liberado com sucesso.');
+            }
+        });
+    }
+
+    const gfBtnWipeAll = document.getElementById('gf-btn-wipe-all');
+    if (gfBtnWipeAll) {
+        gfBtnWipeAll.addEventListener('click', async () => {
+            if (confirm('ATENÇÃO: Deseja apagar todos os arquivos .big do armazenamento do navegador?\nVocê precisará importá-los novamente para jogar.')) {
+                if (window.CaptalvoAssetManager) {
+                    await window.CaptalvoAssetManager.deleteAllAssets();
+                    await refreshInstalledAssets();
+                    await renderGameFilesManager();
+                    alert('Todos os arquivos foram excluídos.');
+                }
+            }
+        });
+    }
+
+    // Diagnostics Tactical Tabs switching
+    document.querySelectorAll('.tactical-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-tab');
+            document.querySelectorAll('.tactical-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tactical-tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            const pane = document.getElementById(targetId);
+            if (pane) pane.classList.add('active');
+
+            if (targetId === 'diag-tab-ranking') {
+                renderFileRankingTable();
+            } else if (targetId === 'diag-tab-sessions') {
+                renderSessionsHistory();
+            }
+        });
+    });
+
+    // LGPD Consent Save Button
+    const btnSaveConsent = document.getElementById('btn-save-consent');
+    if (btnSaveConsent && window.CaptalvoDiagnostics) {
+        btnSaveConsent.addEventListener('click', () => {
+            const perf = document.getElementById('consent-performance');
+            const hw = document.getElementById('consent-hardware');
+            window.CaptalvoDiagnostics.consent.saveConsent({
+                performanceMetrics: perf ? perf.checked : true,
+                hardwareProfile: hw ? hw.checked : true
+            });
+            alert('Preferências de privacidade e telemetria salvas com sucesso.');
+        });
+    }
+
+    // Refresh Sessions in Diagnostics
+    const btnRefreshSessions = document.getElementById('btn-refresh-sessions');
+    if (btnRefreshSessions) {
+        btnRefreshSessions.addEventListener('click', renderSessionsHistory);
+    }
+
     // Launcher Open & Quick Dock Toggle
     const btnOpenLauncher = document.getElementById('btn-open-launcher');
     if (btnOpenLauncher) {

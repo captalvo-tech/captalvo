@@ -57,8 +57,12 @@ if ($path === '/api/telemetry' || $path === '/api/logs' || str_ends_with($path, 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode($controller->ingest(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         } else {
-            // GET returns recent telemetry entries
-            echo json_encode($controller->getRecent(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            // GET returns aggregated stats or recent telemetry entries
+            if (isset($_GET['action']) && $_GET['action'] === 'stats') {
+                echo json_encode($controller->getStats(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            } else {
+                echo json_encode($controller->getRecent(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
         }
     } else {
         http_response_code(500);
