@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>BIG ARMADA — MMORTS Militar Global Persistente &middot; Captalvo</title>
-    <meta name="description" content="Big Armada: MMORTS militar global em tempo real na Terra real indexado via S2 Geometry. Setor piloto de Uberaba - MG.">
+    <title>BIG ARMADA — MMORTS Militar Global &middot; Setor Uberaba</title>
+    <meta name="description" content="Big Armada: RTS Militar em tempo real com bases, tanques de guerra, infantaria e conquista de instalações estratégicas.">
     
     <!-- Anti-Cache Directives -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -12,39 +12,39 @@
     <meta http-equiv="Expires" content="0">
 
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2302090e'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='18' font-weight='bold' fill='%2300d9ff' text-anchor='middle'%3EBA%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/big-armada.css?t=1793817914">
+    <link rel="stylesheet" href="css/big-armada.css">
 </head>
 
 <body class="scanlines">
 
-    <!-- Top Tactical Bar -->
+    <!-- Top Tactical Military Bar -->
     <header class="top-bar">
         <div class="top-bar-left">
-            <a href="/" class="tac-btn" style="text-decoration:none; padding:5px 10px; font-size:10px; color:#88a0b0; border-color:rgba(255,255,255,0.2);" title="Retornar à página principal do Captalvo">
-                ◀ CAPTALVO HOME
+            <a href="/" class="tac-btn" style="text-decoration:none; padding:5px 12px; font-size:11px; font-weight:700; color:#88a0b0; border-color:rgba(255,255,255,0.25);" title="Voltar ao portal principal">
+                ◀ CAPTALVO
             </a>
             <div class="brand-badge">
                 <span class="dot"></span>
-                BIG ARMADA &bull; MMORTS GLOBAL
+                BIG ARMADA &bull; SETOR UBERABA
             </div>
             <div class="hud-pill">
-                <span>SETOR S2:</span>
-                <strong id="hud-sector">10d0000000175833 (Uberaba - MG)</strong>
+                <span>SETOR:</span>
+                <strong id="hud-sector">Uberaba (SBUR / BR-050)</strong>
             </div>
         </div>
 
         <div class="top-bar-center">
             <div class="hud-pill gold">
-                <span>TESOURO:</span>
-                <strong id="hud-treasury">$1,500</strong>
+                <span>💰 TESOURO:</span>
+                <strong id="hud-treasury">$2,000</strong>
             </div>
             <div class="hud-pill">
-                <span>MANUTENÇÃO / SALÁRIOS:</span>
-                <strong id="hud-payroll" style="color:#ffaa00;">-$15</strong>
+                <span>SALÁRIOS / UPKEEP:</span>
+                <strong id="hud-payroll" style="color:#ffaa00;">-$45/tick</strong>
             </div>
             <div class="hud-pill green">
                 <span>FLUXO LÍQUIDO:</span>
-                <strong id="hud-cashflow">+$35/tick</strong>
+                <strong id="hud-cashflow">+$60/tick</strong>
             </div>
             <div id="hud-alert-badge" class="hud-pill alert" style="display:none;">
                 ⚠️ ALERTA DE INADIMPLÊNCIA
@@ -53,11 +53,14 @@
 
         <div class="top-bar-right">
             <div class="hud-pill">
-                <span>BASE:</span>
+                <span>BASE ATIVA:</span>
                 <strong style="color:#00ff88;">GLA STEALTH CAMUFLADA</strong>
             </div>
-            <button id="btn-quick-airport" class="tac-btn warning" style="padding:4px 10px; font-size:10px;" title="Centralizar câmera no Aeroporto de Uberaba">
-                ✈️ AEROPORTO UBERABA
+            <button id="btn-quick-base" class="tac-btn success" style="padding:5px 10px; font-size:11px; font-weight:700;" title="Centralizar câmera na base principal">
+                🏰 MINHA BASE
+            </button>
+            <button id="btn-quick-airport" class="tac-btn warning" style="padding:5px 10px; font-size:11px; font-weight:700;" title="Centralizar câmera no Aeroporto de Uberaba">
+                ✈️ AEROPORTO SBUR
             </button>
         </div>
     </header>
@@ -65,73 +68,154 @@
     <!-- 3D RTS Viewport Canvas -->
     <canvas id="rts-canvas"></canvas>
 
-    <!-- Left Command & Construction Panel -->
+    <!-- Left Military Command & Construction Panel -->
     <aside class="side-panel side-panel-left">
         <div class="panel-header">
-            <span>⚙️ COMANDO &amp; CONSTRUÇÃO</span>
-            <span style="font-size:10px; color:var(--muted);">GLA SPEC</span>
+            <span>🛠️ BASE &amp; CONSTRUÇÃO</span>
+            <span style="font-size:10px; color:#00ff88; font-weight:700;">PRODUÇÃO RTS</span>
         </div>
         <div class="panel-body">
             
-            <!-- Base Construction (GLA Stealth style) -->
-            <div style="font-size:11px; font-weight:800; color:#00d9ff; text-transform:uppercase; margin-top:4px;">
-                Construção de Base Furtiva
+            <!-- Base Structures Section -->
+            <div class="tac-section-title">
+                🏢 ESTRUTURAS MILITARES
             </div>
-            <button class="tac-btn btn-build" data-type="command_center" title="Construir Centro de Comando Camuflado">
-                <span>QG Clandestino Camuflado</span>
+
+            <button class="tac-btn btn-build" data-type="command_center" title="Centro de Comando com antena de comunicação e radar">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🏰</span>
+                    <div>
+                        <div class="btn-tac-name">QG de Comando</div>
+                        <small class="btn-tac-sub">Bunker Blindado &bull; Renda +$20</small>
+                    </div>
+                </div>
                 <span class="tac-btn-cost">$400</span>
             </button>
-            <button class="tac-btn btn-build" data-type="supply_stash" title="Construir Esconderijo de Coleta de Recursos">
-                <span>Esconderijo de Suprimentos</span>
-                <span class="tac-btn-cost">$250</span>
+
+            <button class="tac-btn btn-build" data-type="war_factory" title="Fábrica Pesada para produção de tanques blindados">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🏭</span>
+                    <div>
+                        <div class="btn-tac-name">Fábrica de Tanques</div>
+                        <small class="btn-tac-sub">Produção de Blindados Pesados</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost">$500</span>
             </button>
-            <button class="tac-btn btn-build" data-type="barracks" title="Construir Acampamento para Contratação Militar">
-                <span>Acampamento de Recrutas</span>
+
+            <button class="tac-btn btn-build" data-type="barracks" title="Quartel militar para treinamento de infantaria">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">⛺</span>
+                    <div>
+                        <div class="btn-tac-name">Quartel de Tropas</div>
+                        <small class="btn-tac-sub">Treinamento de Infantaria</small>
+                    </div>
+                </div>
                 <span class="tac-btn-cost">$200</span>
             </button>
 
-            <!-- Military Recruitment & Salary Units -->
-            <div style="font-size:11px; font-weight:800; color:#00d9ff; text-transform:uppercase; margin-top:10px;">
-                Contratação de Forças Militares
-            </div>
-            <button class="tac-btn btn-produce" data-type="infantry_scout" title="Batedor Leve: Salário $15/tick">
-                <div>
-                    <div>Batedor Clandestino</div>
-                    <small style="font-size:9px; color:#88a0b0;">Salário: $15/tick</small>
+            <button class="tac-btn btn-build" data-type="supply_stash" title="Depósito de suprimentos e logística">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">📦</span>
+                    <div>
+                        <div class="btn-tac-name">Depósito de Recursos</div>
+                        <small class="btn-tac-sub">Containers &bull; Renda +$35</small>
+                    </div>
                 </div>
-                <span class="tac-btn-cost">$50</span>
+                <span class="tac-btn-cost">$250</span>
             </button>
-            <button class="tac-btn btn-produce" data-type="infantry_stealth" title="Atirador Furtivo Camuflado: Salário $25/tick">
-                <div>
-                    <div>Atirador Furtivo</div>
-                    <small style="font-size:9px; color:#88a0b0;">Salário: $25/tick &bull; Camuflado</small>
-                </div>
-                <span class="tac-btn-cost">$80</span>
-            </button>
-            <button class="tac-btn btn-produce" data-type="vehicle_technical" title="Pick-up Armada Técnica: Salário $45/tick">
-                <div>
-                    <div>Pick-up Técnica (DShK)</div>
-                    <small style="font-size:9px; color:#88a0b0;">Salário: $45/tick &bull; Rápido</small>
+
+            <button class="tac-btn btn-build" data-type="power_plant" title="Usina elétrica geradora de energia para a base">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">⚡</span>
+                    <div>
+                        <div class="btn-tac-name">Usina de Energia</div>
+                        <small class="btn-tac-sub">Gerador de Plasma Pulsante</small>
+                    </div>
                 </div>
                 <span class="tac-btn-cost">$150</span>
             </button>
 
-            <!-- Sandbox Dev / Experimentation Controls -->
-            <div style="font-size:11px; font-weight:800; color:#e5a93b; text-transform:uppercase; margin-top:14px; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
-                ⚡ Testes de Campo / Economia
+            <button class="tac-btn btn-build" data-type="defense_turret" title="Torre de defesa de tiro rápido com canhões duplos">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🛡️</span>
+                    <div>
+                        <div class="btn-tac-name">Torre de Defesa</div>
+                        <small class="btn-tac-sub">Canhões Duplos 360°</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost">$200</span>
+            </button>
+
+            <!-- Military Forces & Armored Units Section -->
+            <div class="tac-section-title" style="margin-top:14px;">
+                ⚔️ FORÇAS MILITARES &amp; TANQUES
             </div>
-            <button id="btn-dev-add-funds" class="tac-btn success" title="Adiciona $1,000 para testes táticos">
+
+            <button class="tac-btn btn-produce primary-tank" data-type="tank_battle" title="Tanque de Guerra Pesado com canhão longo e blindagem frontal">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon" style="font-size:16px;">🛡️</span>
+                    <div>
+                        <div class="btn-tac-name" style="color:#00ff88; font-weight:800;">Tanque de Batalha Pesado</div>
+                        <small class="btn-tac-sub">Canhão 120mm &bull; Esteiras &bull; 400 HP</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost gold">$350</span>
+            </button>
+
+            <button class="tac-btn btn-produce" data-type="vehicle_technical" title="Pick-up de combate rápido com metralhadora DShK montada">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🚙</span>
+                    <div>
+                        <div class="btn-tac-name">Blindado Técnico</div>
+                        <small class="btn-tac-sub">Metralhadora DShK &bull; Rápido</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost">$150</span>
+            </button>
+
+            <button class="tac-btn btn-produce" data-type="infantry_scout" title="Batedor Leve: Captura de estruturas e reconhecimento">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🪖</span>
+                    <div>
+                        <div class="btn-tac-name">Batedor Clandestino</div>
+                        <small class="btn-tac-sub">Soldado Fuzileiro &bull; Captura</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost">$50</span>
+            </button>
+
+            <button class="tac-btn btn-produce" data-type="infantry_stealth" title="Atirador Furtivo com camuflagem ativa e mira telescópica">
+                <div class="btn-tac-content">
+                    <span class="btn-tac-icon">🎯</span>
+                    <div>
+                        <div class="btn-tac-name">Atirador Furtivo</div>
+                        <small class="btn-tac-sub">Sniper &bull; Camuflagem Furtiva</small>
+                    </div>
+                </div>
+                <span class="tac-btn-cost">$80</span>
+            </button>
+
+            <!-- Quick Sandbox Testing Actions -->
+            <div class="tac-section-title" style="margin-top:14px; color:#ffaa00;">
+                ⚡ TESTES DE CAMPO
+            </div>
+
+            <button id="btn-dev-add-funds" class="tac-btn success" title="Adiciona $1,000 ao tesouro militar">
                 💵 Injetar +$1,000 Fundos
             </button>
-            <button id="btn-dev-trigger-default" class="tac-btn danger" title="Corta fundos a $0 e força inadimplência para testar deserção militar">
-                ⚠️ Provocar Deserção (Zerar Caixa)
-            </button>
-            <button id="btn-dev-sim-player" class="tac-btn warning" title="Conecta um segundo jogador simulado para interagir no mesmo mundo">
+            <button id="btn-dev-sim-player" class="tac-btn warning" title="Conecta um segundo exército rival para simulação de batalha">
                 👥 Simular 2º Jogador (Rival)
             </button>
-            
-            <div style="font-size:10px; color:#88a0b0; line-height:1.4; margin-top:6px;">
-                💡 <strong>Dica tática:</strong> Selecione um soldado com botão esquerdo e clique com botão direito no <strong>Aeroporto de Uberaba</strong> para capturá-lo e hastear sua bandeira!
+            <button id="btn-dev-trigger-default" class="tac-btn danger" title="Zera o caixa para forçar soldados a desertarem em mercenários neutros">
+                ⚠️ Provocar Deserção (Zerar Caixa)
+            </button>
+
+            <div style="font-size:10px; color:#88a0b0; line-height:1.4; margin-top:8px;">
+                💡 <strong>Comandos RTS:</strong><br>
+                &bull; <strong>Botão Esquerdo</strong>: Seleciona unidades ou arrasta caixa.<br>
+                &bull; <strong>Botão Direito</strong>: Move unidades ou captura o <strong>Aeroporto</strong>.<br>
+                &bull; <strong>WASD / Scroll</strong>: Movimenta a câmera e dá zoom.
             </div>
 
         </div>
@@ -139,7 +223,7 @@
 
     <!-- Radar Tactical Mini-Map in bottom left -->
     <div class="radar-map-wrap">
-        <canvas id="radar-canvas" width="180" height="180"></canvas>
+        <canvas id="radar-canvas" width="190" height="190"></canvas>
     </div>
 
     <!-- Right Tactical Inspector Panel -->
@@ -149,21 +233,21 @@
             <span style="font-size:10px; color:var(--muted);">STATUS REAL</span>
         </div>
         <div class="panel-body" id="inspector-content">
-            <div style="font-size:11px; color:#888; text-align:center; padding:20px 0;">
+            <div style="font-size:11px; color:#888; text-align:center; padding:24px 0;">
                 Nenhuma unidade ou instalação selecionada.<br>
-                <small>Clique em um soldado ou no Aeroporto para inspecionar.</small>
+                <small>Clique em um tanque, soldado ou no Aeroporto para inspecionar.</small>
             </div>
         </div>
     </aside>
 
     <!-- Notification Toast Container -->
-    <div id="tac-notifications" style="position:fixed; bottom:20px; right:270px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none;"></div>
+    <div id="tac-notifications" style="position:fixed; bottom:20px; right:280px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none;"></div>
 
     <!-- Client Scripts -->
-    <script src="js/s2_client.js?t=1793817914"></script>
-    <script src="js/terrain_engine.js?t=1793817914"></script>
-    <script src="js/rts_renderer.js?t=1793817914"></script>
-    <script src="js/big-armada-client.js?t=1793817914"></script>
+    <script src="js/s2_client.js"></script>
+    <script src="js/terrain_engine.js"></script>
+    <script src="js/rts_renderer.js"></script>
+    <script src="js/big-armada-client.js"></script>
 
 </body>
 </html>

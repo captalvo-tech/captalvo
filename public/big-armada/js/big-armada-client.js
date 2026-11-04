@@ -1,14 +1,16 @@
 /**
- * BIG ARMADA — Main Client Application Controller (Captalvo Production Edition)
+ * BIG ARMADA — Main Client Application Controller (RTS Visual Edition)
  * Handles user interactions, camera controls, unit selection, contextual orders,
- * SSE & Polling multiplayer synchronization with captalvo.online/api/big-armada.php,
- * and real-time tactical HUD updates.
+ * real-time movement interpolation (60 FPS), unit production (Battle Tanks, Infantry),
+ * structure building with ghost placement grid, and radar tactical HUD.
  */
 
 (function () {
     'use strict';
 
-    const API_BASE = '/api/big-armada.php';
+    const API_BASE = window.location.hostname.includes('github.io')
+        ? 'https://captalvo.online/api/big-armada.php'
+        : (window.__BIG_ARMADA_API_BASE__ || '/api/big-armada.php');
 
     let renderer = null;
     let worldState = { players: {}, units: {}, buildings: {}, installations: {}, alliances: {} };
@@ -16,9 +18,10 @@
     let selectedUnitIds = [];
     let selectedInstallationId = null;
 
-    let buildMode = null; // 'command_center', 'supply_stash', 'barracks'
+    let buildMode = null; // 'command_center', 'war_factory', 'barracks', 'supply_stash', 'power_plant', 'defense_turret'
     let eventSource = null;
     let pollingInterval = null;
+    let lastFrameTime = performance.now();
 
     // Load or generate Player ID
     let playerId = localStorage.getItem('big_armada_player_id');
@@ -69,9 +72,9 @@
             if (joinRes && joinRes.success) {
                 localPlayer = joinRes.player;
                 worldState = joinRes.snapshot;
-                console.log('[BigArmadaClient] Conectado a captalvo.online como:', localPlayer.name);
+                console.log('[BigArmadaClient] Conectado ao servidor autoritativo como:', localPlayer.name);
 
-                // Focus camera on player spawn point
+                // Focus camera directly on player's base and tank
                 const spawnLocal = BigArmadaS2.latLonToLocalMeters(
                     localPlayer.spawn_lat,
                     localPlayer.spawn_lon,
@@ -81,7 +84,15 @@
                 renderer.camX = spawnLocal.x;
                 renderer.camZ = spawnLocal.z;
 
+                // Select player's initial battle tank automatically
+                Object.values(worldState.units || {}).forEach(u => {
+                    if (u.owner === playerId && u.type === 'tank_battle') {
+                        selectedUnitIds = [u.id];
+                    }
+                });
+
                 updateHUD();
+                updateInspector();
             }
         } catch (err) {
             console.error('[BigArmadaClient] Falha ao registrar jogador:', err);
@@ -90,16 +101,57 @@
         // 2. Connect to Server-Sent Events (SSE) & Fallback Polling
         connectSync();
 
-        // 3. Start Render Loop (60 FPS)
-        function loop() {
+        // 3. Start 60 FPS Render & Simulation Loop
+        function loop(timestamp) {
+            const dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000.0);
+            lastFrameTime = timestamp;
+
+            // Smooth 60 FPS unit movement step
+            stepUnitPositions(dt);
+
+            // Render 3D isometric RTS scene
             renderer.render(worldState, selectedUnitIds, playerId);
+
+            // Render Radar Mini-Map
+            renderRadar();
+
             requestAnimationFrame(loop);
         }
         requestAnimationFrame(loop);
     }
 
+    function stepUnitPositions(dt) {
+        if (!worldState.units) return;
+
+        Object.values(worldState.units).forEach(u => {
+            if (u.is_moving && u.target_lat && u.target_lon) {
+                const currentMeters = BigArmadaS2.latLonToLocalMeters(u.lat, u.lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+                const targetMeters = BigArmadaS2.latLonToLocalMeters(u.target_lat, u.target_lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+
+                const dx = targetMeters.x - currentMeters.x;
+                const dz = targetMeters.z - currentMeters.z;
+                const dist = Math.hypot(dx, dz);
+
+                const speed = (u.speed_ms || 4.0) * 18.0; // Scaled RTS gameplay speed
+                const step = speed * dt;
+
+                if (dist <= step) {
+                    u.lat = u.target_lat;
+                    u.lon = u.target_lon;
+                    u.is_moving = false;
+                } else {
+                    const nx = currentMeters.x + (dx / dist) * step;
+                    const nz = currentMeters.z + (dz / dist) * step;
+                    const newLatLon = BigArmadaS2.localMetersToLatLon(nx, nz, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+                    u.lat = newLatLon.lat;
+                    u.lon = newLatLon.lon;
+                    u.facing_angle = Math.atan2(dz, dx);
+                }
+            }
+        });
+    }
+
     function connectSync() {
-        // SSE Attempt
         try {
             eventSource = new EventSource(`${API_BASE}?action=events`);
             eventSource.addEventListener('tick', (e) => {
@@ -108,11 +160,8 @@
                     applySnapshot(data.snapshot);
                 }
             });
-            eventSource.onerror = () => {
-                // If SSE is buffered or closed by proxy, keep polling active
-            };
         } catch (e) {
-            console.warn('[BigArmadaClient] SSE não suportado, usando polling contínuo.');
+            console.warn('[BigArmadaClient] SSE indisponível, usando sincronização via polling.');
         }
 
         // Polling sync every 1500ms
@@ -125,6 +174,20 @@
     }
 
     function applySnapshot(newSnapshot) {
+        // Preserve local moving waypoints to prevent snapping during animation
+        if (newSnapshot.units && worldState.units) {
+            Object.keys(newSnapshot.units).forEach(uId => {
+                const localU = worldState.units[uId];
+                if (localU && localU.is_moving) {
+                    newSnapshot.units[uId].is_moving = true;
+                    newSnapshot.units[uId].target_lat = localU.target_lat;
+                    newSnapshot.units[uId].target_lon = localU.target_lon;
+                    newSnapshot.units[uId].lat = localU.lat;
+                    newSnapshot.units[uId].lon = localU.lon;
+                }
+            });
+        }
+
         worldState = newSnapshot;
         if (worldState.players && worldState.players[playerId]) {
             localPlayer = worldState.players[playerId];
@@ -148,6 +211,7 @@
                 if (buildMode) {
                     executeBuildStructure(buildMode, ground.x, ground.z);
                     buildMode = null;
+                    renderer.buildGhost = null;
                     canvas.style.cursor = 'crosshair';
                     return;
                 }
@@ -183,6 +247,19 @@
         });
 
         window.addEventListener('mousemove', (e) => {
+            // Update Ghost Build Preview
+            if (buildMode) {
+                const ground = renderer.screenToWorld(e.clientX, e.clientY);
+                renderer.buildGhost = {
+                    type: buildMode,
+                    worldX: ground.x,
+                    worldZ: ground.z,
+                    isValid: true
+                };
+            } else {
+                renderer.buildGhost = null;
+            }
+
             if (renderer.isPanning) {
                 const dx = (e.clientX - renderer.lastMouseX) / renderer.zoom;
                 const dz = (e.clientY - renderer.lastMouseY) / (renderer.zoom * Math.cos(renderer.pitch));
@@ -237,7 +314,7 @@
             if (clickedInst) {
                 executeCaptureOrder(selectedUnitIds, clickedInst);
                 renderer.addWaypointPulse(ground.x, ground.z, '#ffaa00');
-                showNotification(`🚩 Ordem de Captura transmitida para ${clickedInst.name}!`, '#ffaa00');
+                showNotification(`🚩 Ordem de Marcha e Captura transmitida para ${clickedInst.name}!`, '#ffaa00');
                 return;
             }
 
@@ -248,7 +325,7 @@
                 return;
             }
 
-            // 3. Regular Ground Move Order
+            // 3. Regular Ground Move Order for selected units
             executeMoveOrder(selectedUnitIds, targetLatLon.lat, targetLatLon.lon, ground.x, ground.z);
             renderer.addWaypointPulse(ground.x, ground.z, '#00ff88');
         });
@@ -257,10 +334,10 @@
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY < 0 ? 1.15 : 0.85;
-            renderer.zoom = Math.max(0.35, Math.min(2.5, renderer.zoom * delta));
+            renderer.zoom = Math.max(0.4, Math.min(2.5, renderer.zoom * delta));
         }, { passive: false });
 
-        // WASD & Arrow Keys Keyboard Pan
+        // Keyboard Pan & Escape
         window.addEventListener('keydown', (e) => {
             const panSpeed = 35 / renderer.zoom;
             if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') renderer.camZ -= panSpeed;
@@ -269,6 +346,7 @@
             if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') renderer.camX += panSpeed;
             if (e.key === 'Escape') {
                 buildMode = null;
+                renderer.buildGhost = null;
                 selectedUnitIds = [];
                 selectedInstallationId = null;
                 canvas.style.cursor = 'crosshair';
@@ -282,8 +360,9 @@
         Object.values(worldState.units || {}).forEach(u => {
             const loc = BigArmadaS2.latLonToLocalMeters(u.lat, u.lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
             const s = renderer.worldToScreen(loc.x, loc.z, BigArmadaTerrain.getElevation(loc.x, loc.z));
+            const hitRadius = u.type === 'tank_battle' ? 32 : 24;
             const dist = Math.hypot(screenX - s.x, screenY - s.y);
-            if (dist < 26) {
+            if (dist < hitRadius) {
                 found = u;
             }
         });
@@ -296,7 +375,7 @@
             const loc = BigArmadaS2.latLonToLocalMeters(inst.lat, inst.lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
             const s = renderer.worldToScreen(loc.x, loc.z, BigArmadaTerrain.getElevation(loc.x, loc.z));
             const dist = Math.hypot(screenX - s.x, screenY - s.y);
-            if (dist < 40) {
+            if (dist < 48) {
                 found = inst;
             }
         });
@@ -306,11 +385,16 @@
     // --- ACTIONS EXECUTORS ---
 
     async function executeMoveOrder(unitIds, targetLat, targetLon, targetX, targetZ) {
-        // Immediate local visual feedback
-        unitIds.forEach(uId => {
+        // Immediate local responsive feedback
+        unitIds.forEach((uId, idx) => {
             if (worldState.units && worldState.units[uId]) {
-                worldState.units[uId].target_lat = targetLat;
-                worldState.units[uId].target_lon = targetLon;
+                // Slight formation spacing for multiple units
+                const angle = (idx / Math.max(1, unitIds.length)) * Math.PI * 2;
+                const offsetLat = Math.cos(angle) * 0.00015;
+                const offsetLon = Math.sin(angle) * 0.00015;
+
+                worldState.units[uId].target_lat = targetLat + offsetLat;
+                worldState.units[uId].target_lon = targetLon + offsetLon;
                 worldState.units[uId].is_moving = true;
             }
         });
@@ -345,21 +429,30 @@
 
     async function executeProduceUnit(type) {
         if (!localPlayer) return;
-        const spawnLat = (localPlayer.spawn_lat || -19.7472) + (Math.random() - 0.5) * 0.002;
-        const spawnLon = (localPlayer.spawn_lon || -47.9392) + (Math.random() - 0.5) * 0.002;
 
-        const res = await apiPost('join', { playerId, playerName: localPlayer.name, color: localPlayer.color });
-        if (res && res.snapshot) {
-            worldState = res.snapshot;
-            showNotification(`✓ Força militar contratada! Salários atualizados no setor.`, '#00d9ff');
+        const res = await apiPost('produce', { type });
+        if (res && res.success) {
+            if (res.unit) {
+                worldState.units = worldState.units || {};
+                worldState.units[res.unit.id] = res.unit;
+                selectedUnitIds = [res.unit.id]; // Auto-select new unit
+            }
+            if (res.treasury !== undefined) {
+                localPlayer.treasury = res.treasury;
+            }
+            const unitName = res.unit ? res.unit.name : type.toUpperCase();
+            showNotification(`🛡️ ${unitName} fabricado e pronto para o combate!`, '#00ff88');
             updateHUD();
+            updateInspector();
+        } else {
+            showNotification(`❌ Falha: ${res.error || 'Fundos insuficientes'}`, '#ff3344');
         }
     }
 
     async function executeRecruitMercenary(targetUnitId) {
         const res = await apiPost('recruit', { unitId: targetUnitId });
         if (res && res.success) {
-            showNotification(`✓ Mercenário neutro recrutado! Você assumiu o contrato militar.`, '#00ff88');
+            showNotification(`✓ Mercenário neutro contratado! Você assumiu o contrato militar.`, '#00ff88');
             selectedUnitIds = [targetUnitId];
             if (res.unit && worldState.units) {
                 worldState.units[targetUnitId] = res.unit;
@@ -381,16 +474,18 @@
         if (hudTreasury) hudTreasury.innerText = `$${Math.round(localPlayer.treasury).toLocaleString()}`;
 
         const hudPayroll = document.getElementById('hud-payroll');
-        if (hudPayroll) hudPayroll.innerText = `-$${Math.round(localPlayer.upkeep_last || 15)}`;
+        if (hudPayroll) hudPayroll.innerText = `-$${Math.round(localPlayer.upkeep_last || 45)}/tick`;
 
         const hudCashflow = document.getElementById('hud-cashflow');
         if (hudCashflow) {
-            // Count controlled installations
             let bonus = 0;
             Object.values(worldState.installations || {}).forEach(inst => {
-                if (inst.controller === playerId) bonus += (inst.income_bonus_per_tick || 50);
+                if (inst.controller === playerId) bonus += (inst.income_bonus_per_tick || 60);
             });
-            const net = bonus - (localPlayer.upkeep_last || 15);
+            Object.values(worldState.buildings || {}).forEach(bld => {
+                if (bld.owner === playerId) bonus += (bld.income_per_tick || 10);
+            });
+            const net = bonus - (localPlayer.upkeep_last || 45);
             hudCashflow.innerText = `${net >= 0 ? '+' : ''}$${Math.round(net)}/tick`;
             hudCashflow.style.color = net >= 0 ? '#00ff88' : '#ff3344';
         }
@@ -415,28 +510,30 @@
             if (u) {
                 const isMine = u.owner === playerId;
                 const isDeserter = u.owner === 'neutral_mercenary' || u.contract_status === 'deserted';
+                const isTank = u.type === 'tank_battle';
 
                 container.innerHTML = `
-                    <div style="font-weight:700; color:${u.color || '#fff'}; font-size:13px; margin-bottom:8px;">
-                        ${u.name}
+                    <div style="font-weight:800; color:${u.color || '#fff'}; font-size:14px; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                        <span>${isTank ? '🛡️' : '🪖'}</span>
+                        <span>${u.name}</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Tipo:</span>
-                        <span>${u.type.toUpperCase()}</span>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Classe:</span>
+                        <strong style="color:#00ff88;">${isTank ? 'BLINDADO DE LINHA' : 'INFANTARIA'}</strong>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Status Contrato:</span>
-                        <span style="color:${isDeserter ? '#e67e22' : (u.contract_status === 'overdue' ? '#ff3344' : '#00ff88')}; font-weight:700;">
-                            ${isDeserter ? 'DESERTOR (MERCENÁRIO)' : (u.contract_status === 'overdue' ? 'SALÁRIO ATRASADO' : 'ATIVO')}
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Armamento:</span>
+                        <span>${isTank ? 'Canhão 120mm Heavy' : 'Fuzil Tático 5.56mm'}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Blindagem / HP:</span>
+                        <span>${u.health || (isTank ? 400 : 100)} / ${u.max_health || (isTank ? 400 : 100)}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Contrato Militar:</span>
+                        <span style="color:${isDeserter ? '#e67e22' : '#00ff88'}; font-weight:700;">
+                            ${isDeserter ? 'DESERTOR (MERCENÁRIO)' : 'ATIVO &bull; SOLDO EM DIA'}
                         </span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Camuflagem:</span>
-                        <span style="color:#00ff88;">GLA STEALTH ATIVA</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Integridade:</span>
-                        <span>${u.health || 100} / 100</span>
                     </div>
                     ${isDeserter ? `
                         <button id="btn-inspect-recruit" class="tac-btn success" style="margin-top:10px; width:100%;">
@@ -458,25 +555,22 @@
             if (inst) {
                 const isMine = inst.controller === playerId;
                 container.innerHTML = `
-                    <div style="font-weight:700; color:#ffaa00; font-size:13px; margin-bottom:8px;">
-                        ${inst.name}
+                    <div style="font-weight:800; color:#ffaa00; font-size:13px; margin-bottom:8px;">
+                        ✈️ ${inst.name}
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
                         <span style="color:#888;">Controlador:</span>
                         <span style="color:${inst.flag_color || '#888'}; font-weight:700;">
-                            ${inst.controller ? (isMine ? 'VOCÊ (Comandante)' : inst.controller) : 'NEUTRO / DISPONÍVEL'}
+                            ${inst.controller ? (isMine ? 'VOCÊ (Comandante)' : inst.controller) : 'NEUTRO'}
                         </span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Progresso Captura:</span>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Progresso:</span>
                         <span>${Math.round(inst.capture_progress || 0)}%</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#888;">Bônus Econômico:</span>
-                        <span style="color:#00ff88; font-weight:700;">+$${inst.income_bonus_per_tick || 50}/tick</span>
-                    </div>
-                    <div style="font-size:10px; color:#888; margin-top:10px; line-height:1.4;">
-                        Instalação permanente do mundo real. Mantenha soldados no perímetro de 65m para capturar.
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px;">
+                        <span style="color:#888;">Renda por Tick:</span>
+                        <span style="color:#00ff88; font-weight:700;">+$${inst.income_bonus_per_tick || 60}/tick</span>
                     </div>
                 `;
                 return;
@@ -484,9 +578,9 @@
         }
 
         container.innerHTML = `
-            <div style="font-size:11px; color:#888; text-align:center; padding:20px 0;">
+            <div style="font-size:11px; color:#888; text-align:center; padding:24px 0;">
                 Nenhuma unidade ou instalação selecionada.<br>
-                <small>Clique em um soldado ou no Aeroporto para inspecionar.</small>
+                <small>Clique em um tanque, soldado ou no Aeroporto para inspecionar.</small>
             </div>
         `;
     }
@@ -498,7 +592,7 @@
                 const type = btn.getAttribute('data-type');
                 buildMode = type;
                 document.getElementById('rts-canvas').style.cursor = 'cell';
-                showNotification(`Modo de Construção Ativo: Clique no mapa para posicionar ${type.toUpperCase()}`, '#00d9ff');
+                showNotification(`🏗️ MODO CONSTRUÇÃO: Clique no terreno para posicionar ${type.toUpperCase()}`, '#00d9ff');
             });
         });
 
@@ -509,6 +603,18 @@
                 executeProduceUnit(type);
             });
         });
+
+        // Quick Base Target Button
+        const btnQuickBase = document.getElementById('btn-quick-base');
+        if (btnQuickBase) {
+            btnQuickBase.addEventListener('click', () => {
+                if (localPlayer) {
+                    const loc = BigArmadaS2.latLonToLocalMeters(localPlayer.spawn_lat, localPlayer.spawn_lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+                    renderer.camX = loc.x;
+                    renderer.camZ = loc.z;
+                }
+            });
+        }
 
         // Quick Airport Target Button
         const btnQuickAirport = document.getElementById('btn-quick-airport');
@@ -532,11 +638,11 @@
                 await apiPost('adjust_economy', { delta: 1000 });
                 if (localPlayer) localPlayer.treasury += 1000;
                 updateHUD();
-                showNotification('+$1,000 adicionados ao tesouro!', '#00ff88');
+                showNotification('+$1,000 creditados ao tesouro!', '#00ff88');
             });
         }
 
-        // Dev Testing: Trigger Default (Zero treasury & trigger overdue/desertion)
+        // Dev Testing: Trigger Default
         const btnTriggerDefault = document.getElementById('btn-dev-trigger-default');
         if (btnTriggerDefault) {
             btnTriggerDefault.addEventListener('click', async () => {
@@ -546,7 +652,7 @@
                     localPlayer.unpaid_ticks = (localPlayer.unpaid_ticks || 0) + 1;
                 }
                 updateHUD();
-                showNotification('⚠️ Tesouro zerado! Próximos ciclos provocarão atraso salarial e deserção!', '#ff3344');
+                showNotification('⚠️ Caixa zerado! Observe as tropas desertarem.', '#ff3344');
             });
         }
 
@@ -556,32 +662,108 @@
             btnSimPlayer.addEventListener('click', async () => {
                 const simId = 'cmdr_rival_' + Math.floor(Math.random() * 900 + 100);
                 await apiPost('join', { playerId: simId, playerName: 'Rival Tático Alfa', color: '#ffaa00' });
-                showNotification(`👥 Segundo jogador simulado conectado: ${simId}!`, '#ffaa00');
+                showNotification(`👥 Segundo exército rival gerado: ${simId}!`, '#ffaa00');
             });
         }
     }
 
-    function showNotification(text, color = '#00d9ff') {
+    function renderRadar() {
+        const radarCanvas = document.getElementById('radar-canvas');
+        if (!radarCanvas) return;
+        const rctx = radarCanvas.getContext('2d');
+        const rw = radarCanvas.width;
+        const rh = radarCanvas.height;
+
+        rctx.fillStyle = '#0e1810';
+        rctx.fillRect(0, 0, rw, rh);
+
+        // Radar grid circles
+        rctx.strokeStyle = 'rgba(0, 255, 136, 0.2)';
+        rctx.lineWidth = 1;
+        rctx.beginPath();
+        rctx.arc(rw / 2, rh / 2, rw * 0.45, 0, Math.PI * 2);
+        rctx.arc(rw / 2, rh / 2, rw * 0.25, 0, Math.PI * 2);
+        rctx.stroke();
+
+        // Crosshair lines
+        rctx.beginPath();
+        rctx.moveTo(rw / 2, 0); rctx.lineTo(rw / 2, rh);
+        rctx.moveTo(0, rh / 2); rctx.lineTo(rw, rh / 2);
+        rctx.stroke();
+
+        // Airport Runway line on radar
+        const air = BigArmadaTerrain.AIRPORT_LOCAL;
+        const scale = 0.024;
+        const rx = rw / 2 + (air.x - renderer.camX) * scale;
+        const rz = rh / 2 + (air.z - renderer.camZ) * scale;
+
+        rctx.strokeStyle = '#ffffff';
+        rctx.lineWidth = 2.5;
+        rctx.beginPath();
+        rctx.moveTo(rx, rz - 14);
+        rctx.lineTo(rx, rz + 14);
+        rctx.stroke();
+
+        // Buildings on radar (small squares)
+        if (worldState.buildings) {
+            Object.values(worldState.buildings).forEach(b => {
+                const bM = BigArmadaS2.latLonToLocalMeters(b.lat, b.lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+                const bx = rw / 2 + (bM.x - renderer.camX) * scale;
+                const bz = rh / 2 + (bM.z - renderer.camZ) * scale;
+                if (bx >= 0 && bx <= rw && bz >= 0 && bz <= rh) {
+                    rctx.fillStyle = b.owner === playerId ? '#00ff88' : '#ffaa00';
+                    rctx.fillRect(bx - 3, bz - 3, 6, 6);
+                }
+            });
+        }
+
+        // Units on radar (blips)
+        if (worldState.units) {
+            Object.values(worldState.units).forEach(u => {
+                const uM = BigArmadaS2.latLonToLocalMeters(u.lat, u.lon, BigArmadaTerrain.ORIGIN_LAT, BigArmadaTerrain.ORIGIN_LON);
+                const ux = rw / 2 + (uM.x - renderer.camX) * scale;
+                const uz = rh / 2 + (uM.z - renderer.camZ) * scale;
+                if (ux >= 0 && ux <= rw && uz >= 0 && uz <= rh) {
+                    rctx.fillStyle = u.owner === playerId ? '#00d9ff' : '#ff3344';
+                    rctx.beginPath();
+                    rctx.arc(ux, uz, u.type === 'tank_battle' ? 3.5 : 2, 0, Math.PI * 2);
+                    rctx.fill();
+                }
+            });
+        }
+
+        // Radar Sweep beam
+        const sweepAngle = renderer.animTick * 2.0;
+        rctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
+        rctx.lineWidth = 1.5;
+        rctx.beginPath();
+        rctx.moveTo(rw / 2, rh / 2);
+        rctx.lineTo(rw / 2 + Math.cos(sweepAngle) * rw * 0.45, rh / 2 + Math.sin(sweepAngle) * rh * 0.45);
+        rctx.stroke();
+    }
+
+    function showNotification(text, color = '#00ff88') {
         const container = document.getElementById('tac-notifications');
         if (!container) return;
 
         const notif = document.createElement('div');
-        notif.style.background = 'rgba(2, 9, 14, 0.92)';
-        notif.style.border = `1px solid ${color}`;
+        notif.style.background = 'rgba(12, 20, 15, 0.95)';
+        notif.style.border = `1.5px solid ${color}`;
         notif.style.color = '#fff';
-        notif.style.padding = '8px 14px';
-        notif.style.borderRadius = '4px';
+        notif.style.padding = '10px 16px';
+        notif.style.borderRadius = '5px';
         notif.style.fontSize = '12px';
-        notif.style.boxShadow = `0 4px 15px rgba(0,0,0,0.6), 0 0 10px ${color}33`;
-        notif.style.transition = 'opacity 0.4s ease';
+        notif.style.fontWeight = '700';
+        notif.style.boxShadow = `0 6px 20px rgba(0,0,0,0.7), 0 0 12px ${color}44`;
+        notif.style.transition = 'opacity 0.35s ease';
         notif.innerHTML = text;
 
         container.appendChild(notif);
 
         setTimeout(() => {
             notif.style.opacity = '0';
-            setTimeout(() => notif.remove(), 400);
-        }, 5000);
+            setTimeout(() => notif.remove(), 350);
+        }, 4500);
     }
 
     window.addEventListener('DOMContentLoaded', init);

@@ -318,37 +318,69 @@ switch ($action) {
         $color = $request['color'] ?? '#00d9ff';
 
         if (!isset($world['players'][$playerId])) {
-            // Random offset around Uberaba
-            $spawnLat = -19.7472 + (mt_rand(-50, 50) / 10000.0);
-            $spawnLon = -47.9392 + (mt_rand(-50, 50) / 10000.0);
+            // Spawn point close to Uberaba base sector
+            $spawnLat = -19.7485 + (mt_rand(-25, 25) / 10000.0);
+            $spawnLon = -47.9390 + (mt_rand(-25, 25) / 10000.0);
 
             $world['players'][$playerId] = [
                 'id' => $playerId,
                 'name' => $playerName,
                 'color' => $color,
-                'treasury' => 1200.0,
+                'treasury' => 2000.0,
                 'spawn_lat' => $spawnLat,
                 'spawn_lon' => $spawnLon,
                 'unpaid_ticks' => 0,
                 'joined_at' => gmdate('Y-m-d\TH:i:s\Z')
             ];
 
-            // Initial Scout Unit
-            $uId = 'unit_' . substr(md5($playerId . '_scout_1'), 0, 10);
-            $world['units'][$uId] = [
-                'id' => $uId,
+            // 1. Initial Headquarters Building (Centro de Comando)
+            $bId = 'bld_hq_' . substr(md5($playerId . '_hq'), 0, 8);
+            $world['buildings'][$bId] = [
+                'id' => $bId,
+                'owner' => $playerId,
+                'type' => 'command_center',
+                'name' => 'QG Clandestino',
+                'lat' => $spawnLat,
+                'lon' => $spawnLon,
+                'health' => 500,
+                'max_health' => 500,
+                'income_per_tick' => 20.0,
+                'built_at' => gmdate('Y-m-d\TH:i:s\Z')
+            ];
+
+            // 2. Initial Battle Tank (Tanque de Guerra Pesado)
+            $uTankId = 'unit_tank_' . substr(md5($playerId . '_tank_1'), 0, 8);
+            $world['units'][$uTankId] = [
+                'id' => $uTankId,
+                'owner' => $playerId,
+                'name' => 'Tanque de Batalha Pesado',
+                'type' => 'tank_battle',
+                'lat' => $spawnLat - 0.0003,
+                'lon' => $spawnLon + 0.0004,
+                'speed_ms' => 3.8,
+                'health' => 400,
+                'max_health' => 400,
+                'contract_status' => 'active',
+                'is_moving' => false,
+                'color' => $color
+            ];
+
+            // 3. Initial Scout Soldier (Infantaria)
+            $uScoutId = 'unit_scout_' . substr(md5($playerId . '_scout_1'), 0, 8);
+            $world['units'][$uScoutId] = [
+                'id' => $uScoutId,
                 'owner' => $playerId,
                 'name' => 'Batedor Clandestino #1',
                 'type' => 'infantry_scout',
-                'lat' => $spawnLat,
-                'lon' => $spawnLon,
+                'lat' => $spawnLat + 0.0003,
+                'lon' => $spawnLon - 0.0002,
                 'speed_ms' => 4.5,
-                'is_stealth' => true,
-                'is_moving' => false,
-                'contract_status' => 'active',
-                'color' => $color,
                 'health' => 100,
-                'max_health' => 100
+                'max_health' => 100,
+                'is_stealth' => true,
+                'contract_status' => 'active',
+                'is_moving' => false,
+                'color' => $color
             ];
         }
 
@@ -357,6 +389,63 @@ switch ($action) {
         echo json_encode([
             'success' => true,
             'player' => $world['players'][$playerId],
+            'snapshot' => $world
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        break;
+
+    case 'produce':
+        $playerId = $request['playerId'] ?? '';
+        $type = $request['type'] ?? 'tank_battle';
+
+        $unitCatalog = [
+            'tank_battle' => ['name' => 'Tanque de Batalha Pesado', 'cost' => 350.0, 'health' => 400, 'speed' => 3.8],
+            'vehicle_technical' => ['name' => 'Blindado Técnico (DShK)', 'cost' => 150.0, 'health' => 200, 'speed' => 5.2],
+            'infantry_stealth' => ['name' => 'Atirador Furtivo', 'cost' => 80.0, 'health' => 100, 'speed' => 4.0],
+            'infantry_scout' => ['name' => 'Batedor Clandestino', 'cost' => 50.0, 'health' => 100, 'speed' => 4.5]
+        ];
+
+        $unitInfo = $unitCatalog[$type] ?? $unitCatalog['tank_battle'];
+
+        if (!isset($world['players'][$playerId])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Jogador não encontrado']);
+            exit(0);
+        }
+
+        if ($world['players'][$playerId]['treasury'] < $unitInfo['cost']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Fundos insuficientes para produzir']);
+            exit(0);
+        }
+
+        $world['players'][$playerId]['treasury'] -= $unitInfo['cost'];
+        $uId = 'unit_' . substr(md5(uniqid('', true)), 0, 8);
+
+        // Spawn around player base
+        $spawnLat = ($world['players'][$playerId]['spawn_lat'] ?? -19.7472) + (mt_rand(-30, 30) / 10000.0);
+        $spawnLon = ($world['players'][$playerId]['spawn_lon'] ?? -47.9392) + (mt_rand(-30, 30) / 10000.0);
+
+        $world['units'][$uId] = [
+            'id' => $uId,
+            'owner' => $playerId,
+            'name' => $unitInfo['name'],
+            'type' => $type,
+            'lat' => $spawnLat,
+            'lon' => $spawnLon,
+            'speed_ms' => $unitInfo['speed'],
+            'health' => $unitInfo['health'],
+            'max_health' => $unitInfo['health'],
+            'contract_status' => 'active',
+            'is_moving' => false,
+            'color' => $world['players'][$playerId]['color'] ?? '#00d9ff'
+        ];
+
+        saveWorldState($stateFile, $world);
+
+        echo json_encode([
+            'success' => true,
+            'unit' => $world['units'][$uId],
+            'treasury' => $world['players'][$playerId]['treasury'],
             'snapshot' => $world
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         break;
@@ -398,11 +487,14 @@ switch ($action) {
         $lon = (float)($request['lon'] ?? -47.9392);
 
         $costs = [
-            'command_center' => 500.0,
-            'supply_stash' => 300.0,
-            'barracks' => 200.0
+            'command_center' => 400.0,
+            'war_factory' => 500.0,
+            'barracks' => 200.0,
+            'supply_stash' => 250.0,
+            'power_plant' => 150.0,
+            'defense_turret' => 200.0
         ];
-        $cost = $costs[$type] ?? 400.0;
+        $cost = $costs[$type] ?? 300.0;
 
         if (!isset($world['players'][$playerId])) {
             http_response_code(400);
@@ -418,15 +510,21 @@ switch ($action) {
 
         $world['players'][$playerId]['treasury'] -= $cost;
         $bId = 'bld_' . substr(md5(uniqid('', true)), 0, 8);
+        $incomePerTick = match($type) {
+            'supply_stash' => 35.0,
+            'power_plant' => 15.0,
+            'command_center' => 20.0,
+            default => 5.0
+        };
         $world['buildings'][$bId] = [
             'id' => $bId,
             'owner' => $playerId,
             'type' => $type,
             'lat' => $lat,
             'lon' => $lon,
-            'health' => 500,
-            'max_health' => 500,
-            'income_per_tick' => ($type === 'supply_stash' ? 25.0 : 10.0),
+            'health' => ($type === 'command_center' || $type === 'war_factory') ? 500 : 350,
+            'max_health' => ($type === 'command_center' || $type === 'war_factory') ? 500 : 350,
+            'income_per_tick' => $incomePerTick,
             'built_at' => gmdate('Y-m-d\TH:i:s\Z')
         ];
 
@@ -543,3 +641,4 @@ function handleSSEStream(string $file): void {
         usleep(1000000); // 1 second interval
     }
 }
+
