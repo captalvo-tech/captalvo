@@ -174,19 +174,32 @@ async function refreshInstalledAssets() {
 
     const assetBadge = document.getElementById('assets-badge');
     const playBtn = document.getElementById('btn-play');
+    const dockPlayBtn = document.getElementById('btn-dock-play');
 
     if (foundCount >= requiredCount && requiredCount > 0) {
         AppState.isGameReady = true;
         assetBadge.textContent = `${AppState.installedFiles.size} arquivos prontos`;
         assetBadge.className = 'status-badge badge-ready';
-        playBtn.disabled = false;
-        playBtn.textContent = 'JOGAR CAPTALVO';
+        if (playBtn) {
+            playBtn.disabled = false;
+            playBtn.textContent = 'JOGAR CAPTALVO';
+        }
+        if (dockPlayBtn) {
+            dockPlayBtn.disabled = false;
+            dockPlayBtn.textContent = '▶ JOGAR';
+        }
     } else {
         AppState.isGameReady = false;
         assetBadge.textContent = foundCount > 0 ? `${foundCount}/${requiredCount} essenciais` : 'Não importados';
         assetBadge.className = 'status-badge badge-missing';
-        playBtn.disabled = false; // Clicking will prompt import
-        playBtn.textContent = 'IMPORTAR & JOGAR';
+        if (playBtn) {
+            playBtn.disabled = false;
+            playBtn.textContent = 'IMPORTAR & JOGAR';
+        }
+        if (dockPlayBtn) {
+            dockPlayBtn.disabled = false;
+            dockPlayBtn.textContent = '▶ IMPORTAR & JOGAR';
+        }
     }
 
     updateAssetListUI();
@@ -401,8 +414,14 @@ async function startGame() {
             progressDetail.textContent = label;
         }
         if (stage === 'ready') {
-            document.getElementById('captalvo-shell').classList.add('hidden');
-            document.getElementById('game-escape-bar').style.display = 'block';
+            document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+            const homeMain = document.getElementById('home-main');
+            if (homeMain) homeMain.style.display = 'none';
+            const gameContainer = document.getElementById('game-container');
+            if (gameContainer) gameContainer.style.display = 'flex';
+            const gameEscapeBar = document.getElementById('game-escape-bar');
+            if (gameEscapeBar) gameEscapeBar.style.display = 'flex';
+            if (window.CaptalvoHomeSim) window.CaptalvoHomeSim.pause();
             AppState.isGameRunning = true;
         }
     };
@@ -424,6 +443,41 @@ async function startGame() {
 // UI Event Handlers & Modals
 // -----------------------------------------------------------------------------
 function setupUIEventListeners() {
+    // Launcher Open & Quick Dock Toggle
+    const btnOpenLauncher = document.getElementById('btn-open-launcher');
+    if (btnOpenLauncher) {
+        btnOpenLauncher.addEventListener('click', () => {
+            openModal('modal-launcher');
+            const dock = document.getElementById('home-quick-dock');
+            if (dock) dock.classList.remove('hidden');
+        });
+    }
+
+    // Quick Dock buttons
+    const btnDockPlay = document.getElementById('btn-dock-play');
+    if (btnDockPlay) {
+        btnDockPlay.addEventListener('click', startGame);
+    }
+    const btnDockImport = document.getElementById('btn-dock-import');
+    if (btnDockImport) {
+        btnDockImport.addEventListener('click', () => openModal('modal-import'));
+    }
+    const btnDockDiag = document.getElementById('btn-dock-diag');
+    if (btnDockDiag) {
+        btnDockDiag.addEventListener('click', async () => {
+            openModal('modal-diag');
+            await CaptalvoDiagnostics.renderDiagnosticsUI();
+        });
+    }
+    const btnDockConsole = document.getElementById('btn-dock-console');
+    if (btnDockConsole) {
+        btnDockConsole.addEventListener('click', () => DevConsole.toggle());
+    }
+    const btnDockSettings = document.getElementById('btn-dock-settings');
+    if (btnDockSettings) {
+        btnDockSettings.addEventListener('click', () => openModal('modal-settings'));
+    }
+
     document.getElementById('btn-play').addEventListener('click', startGame);
     document.getElementById('btn-import-assets').addEventListener('click', () => openModal('modal-import'));
     document.getElementById('btn-settings').addEventListener('click', () => openModal('modal-settings'));
@@ -497,8 +551,13 @@ function setupUIEventListeners() {
 
     // Exit Game button
     document.getElementById('btn-exit-game').addEventListener('click', () => {
-        document.getElementById('captalvo-shell').classList.remove('hidden');
-        document.getElementById('game-escape-bar').style.display = 'none';
+        const homeMain = document.getElementById('home-main');
+        if (homeMain) homeMain.style.display = 'flex';
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) gameContainer.style.display = 'none';
+        const gameEscapeBar = document.getElementById('game-escape-bar');
+        if (gameEscapeBar) gameEscapeBar.style.display = 'none';
+        if (window.CaptalvoHomeSim) window.CaptalvoHomeSim.resume();
         AppState.isGameRunning = false;
     });
 

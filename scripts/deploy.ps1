@@ -48,6 +48,7 @@ $indexHtmlPath = Join-Path $PublicDir "index.html"
 if (Test-Path $indexHtmlPath) {
     $indexHtmlContent = Get-Content -Raw -Path $indexHtmlPath -Encoding UTF8
     $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'href="captalvo\.css\?[^"]*"', "href=`"captalvo.css?t=$BuildTimestamp`"")
+    $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'src="captalvo-home-sim\.js\?[^"]*"', "src=`"captalvo-home-sim.js?t=$BuildTimestamp`"")
     $indexHtmlContent = [regex]::Replace($indexHtmlContent, 'src="captalvo-app\.js\?[^"]*"', "src=`"captalvo-app.js?t=$BuildTimestamp`"")
     Set-Content -Path $indexHtmlPath -Value $indexHtmlContent -Encoding UTF8
     Write-Host "    index.html atualizado com timestamp t=$BuildTimestamp" -ForegroundColor Green

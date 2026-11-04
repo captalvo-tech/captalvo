@@ -1,10 +1,18 @@
-﻿<!DOCTYPE html>
-<html lang="pt-BR">
+﻿<!doctype html>
+<html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Captalvo — Conquista sem limites.</title>
-    <meta name="description" content="Captalvo — Simulador de Guerra Global Virtual. Baseado no motor Command & Conquer Generals Zero Hour via WebAssembly.">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#070a09">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Captalvo — Conquista sem limites. Simulador de Guerra Global Virtual. Baseado no motor Command & Conquer Generals Zero Hour via WebAssembly.">
+    <title>Captalvo — Conquista sem limites</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 
     <!-- Anti-Cache Directives (Meta Tags) -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -17,7 +25,7 @@
         var BUILD_TIME = Date.now();
         window.__CAPTALVO_BUILD_TIME__ = BUILD_TIME;
 
-        // 1. Bfcache Killer: Force hard reload if restored from browser memory cache
+        // 1. Bfcache Killer: Force reload if restored from browser memory cache
         window.addEventListener('pageshow', function(event) {
             if (event.persisted) {
                 console.warn('[Captalvo] Detectada restauração de cache (bfcache). Forçando reload...');
@@ -30,7 +38,7 @@
             if (!url || typeof url !== 'string') return url;
             if (url.startsWith('data:') || url.startsWith('blob:')) return url;
             if (url.startsWith('http://') || url.startsWith('https://')) {
-                if (!url.includes(window.location.host)) return url; // External CDN/link
+                if (!url.includes(window.location.host)) return url;
             }
             var sep = url.indexOf('?') === -1 ? '?' : '&';
             if (/[?&](t|_t|v)=\d+/.test(url)) {
@@ -39,7 +47,7 @@
             return url + sep + 't=' + BUILD_TIME;
         }
 
-        // 3. Monkey-patch document.createElement to ensure any dynamically created <script> or <link> gets a fresh timestamp
+        // 3. Monkey-patch document.createElement to ensure dynamically added scripts/links have timestamps
         var originalCreateElement = document.createElement.bind(document);
         document.createElement = function(tagName, options) {
             var el = originalCreateElement(tagName, options);
@@ -95,7 +103,6 @@
 
             try {
                 sessionStorage.clear();
-                // Clear temporary localStorage items except persistent game saves
                 var toRemove = [];
                 for (var i = 0; i < localStorage.length; i++) {
                     var k = localStorage.key(i);
@@ -119,21 +126,26 @@
                 }
             } catch (e) {}
 
-            // Unload completely and redirect with cache busting query param
             var cleanUrl = window.location.origin + window.location.pathname + '?_nocache=' + Date.now();
             window.location.replace(cleanUrl);
         };
-
     })();
     </script>
 
-    <link rel="stylesheet" href="captalvo.css?t=1793750340">
+    <link rel="stylesheet" href="captalvo.css?t=1793750870">
 </head>
 <body>
 
     <!-- WebGL Game Canvas Container -->
-    <div id="game-container">
+    <div id="game-container" style="display:none;">
         <canvas id="canvas" tabindex="-1" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
+
+    <!-- In-Game Floating Escape Bar -->
+    <div id="game-escape-bar" style="display:none;">
+        <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
+        <button id="btn-game-console" type="button">💻 Console [ ~ ]</button>
+        <span id="game-fps-counter" class="game-hud-fps">-- FPS</span>
     </div>
 
     <!-- Backtick Developer Diagnostic Console -->
@@ -149,94 +161,131 @@
         </form>
     </div>
 
-    <!-- In-Game Floating Escape Bar -->
-    <div id="game-escape-bar">
-        <button id="btn-exit-game" type="button">◀ Menu Captalvo</button>
-        <button id="btn-game-console" type="button">💻 Console [ ~ ]</button>
-        <span id="game-fps-counter" class="game-hud-fps">-- FPS</span>
-    </div>
+    <!-- Home View: Tactical Matrix & Brand Stack -->
+    <main id="home-main">
+        <canvas id="map" aria-hidden="true"></canvas>
 
-    <!-- Captalvo Main Shell Overlay -->
-    <div id="captalvo-shell">
-        
-        <!-- Header -->
-        <header class="shell-header">
-            <h1 class="logo-title">CAPTALVO</h1>
-            <p class="logo-slogan">Conquista sem limites.</p>
-            <p class="logo-subtitle">Simulador de Guerra Global Virtual &middot; Alpha 0.1</p>
-        </header>
+        <div class="stack">
+            <p class="eyebrow">Projeto em desenvolvimento</p>
+            <canvas id="logo" role="img" aria-label="Símbolo de bandeira do Captalvo"></canvas>
 
-        <!-- Center Panel -->
-        <main class="shell-center">
-            
-            <!-- Status Card -->
-            <div class="status-card">
-                <div class="status-row">
-                    <span class="status-label">Armazenamento Navegador:</span>
-                    <span id="storage-badge" class="status-badge badge-info">Detectando...</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Arquivos do Jogo (.BIG):</span>
-                    <span id="assets-badge" class="status-badge badge-missing">Verificando...</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Servidor Backend:</span>
-                    <span id="backend-badge" class="status-badge badge-info">Conectando...</span>
-                </div>
+            <div class="titles">
+                <h1 class="status" id="status">CAPTALVO</h1>
+                <p class="tagline">Conquista sem limites.</p>
+                <p class="description">Simulador de Guerra Global Virtual</p>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-                <button id="btn-play" class="btn-primary" type="button" disabled>
-                    JOGAR CAPTALVO
-                </button>
-                
-                <button id="btn-import-assets" class="btn-secondary" type="button">
-                    📁 Importar Arquivos do Jogo
+            <span class="rule" aria-hidden="true"></span>
+
+            <p class="note">Um mundo para construir, expandir e conquistar.</p>
+
+            <!-- Action Area: Botão que abre o modal para começar o jogo e revela menus -->
+            <div class="launcher-cta-wrap">
+                <button id="btn-open-launcher" class="btn-launcher-cta" type="button">
+                    <span class="btn-pulse-dot"></span>
+                    <span class="btn-cta-label">COMEÇAR O JOGO</span>
+                    <span class="btn-cta-badge">ALPHA 0.1</span>
                 </button>
 
-                <div class="button-grid">
-                    <button id="btn-diag" class="btn-secondary" type="button">
-                        🔬 Diagnósticos
+                <!-- Quick Dock com atalhos diretos -->
+                <div id="home-quick-dock" class="quick-dock hidden">
+                    <button id="btn-dock-play" class="dock-pill btn-primary" type="button">
+                        ▶ JOGAR
                     </button>
-                    <button id="btn-toggle-console" class="btn-secondary" type="button">
-                        💻 Console [ ~ ]
+                    <button id="btn-dock-import" class="dock-pill" type="button">
+                        📁 IMPORTAR .BIG
                     </button>
-                    <button id="btn-settings" class="btn-secondary" type="button">
-                        ⚙️ Configurações
+                    <button id="btn-dock-diag" class="dock-pill" type="button">
+                        🔬 DIAGNÓSTICO
                     </button>
-                    <button id="btn-info" class="btn-secondary" type="button">
-                        ℹ️ Sobre a Alpha
+                    <button id="btn-dock-console" class="dock-pill" type="button">
+                        💻 CONSOLE [ ~ ]
+                    </button>
+                    <button id="btn-dock-settings" class="dock-pill" type="button">
+                        ⚙️ CONFIGURAÇÕES
                     </button>
                 </div>
-            </div>
 
-            <!-- Loading Progress -->
-            <div id="progress-container">
-                <div class="progress-header">
-                    <span id="main-progress-status">INICIALIZANDO MOTOR</span>
+                <div class="engine-meta-note">
+                    Motor C&amp;C Generals Zero Hour &middot; WebAssembly &middot; WebGL 2.0
                 </div>
-                <div class="progress-track">
-                    <div id="main-progress-fill" class="progress-fill"></div>
-                </div>
-                <div id="main-progress-detail" class="progress-detail">Carregando módulos...</div>
             </div>
+        </div>
 
-        </main>
-
-        <!-- Footer -->
-        <footer class="shell-footer">
-            <div>Captalvo &copy; 2026 &middot; Motor GPL C&amp;C Generals Zero Hour &middot; WebAssembly</div>
-            <div class="footer-links">
-                <a href="https://captalvo.online" target="_blank">captalvo.online</a>
-                <a href="https://github.com/captalvo-tech/captalvo" target="_blank" rel="noopener noreferrer">GitHub</a>
-            </div>
+        <footer>
+            <p>
+                CAPTALVO.ONLINE &nbsp;&middot;&nbsp; ALPHA EM PREPARAÇÃO &nbsp;&middot;&nbsp; 
+                <a href="https://github.com/captalvo-tech/captalvo" target="_blank" rel="noopener noreferrer">GITHUB</a>
+            </p>
         </footer>
-
-    </div>
+    </main>
 
     <!-- Hidden File Input for fallback selection -->
     <input type="file" id="file-input-fallback" multiple accept=".big" style="display: none;">
+
+    <!-- Modal: Launcher / Central de Operações -->
+    <div id="modal-launcher" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Central de Operações &middot; Alpha</h3>
+                <button class="modal-close" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Status Card -->
+                <div class="status-card">
+                    <div class="status-row">
+                        <span class="status-label">Armazenamento Navegador:</span>
+                        <span id="storage-badge" class="status-badge badge-info">Detectando...</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">Arquivos do Jogo (.BIG):</span>
+                        <span id="assets-badge" class="status-badge badge-missing">Verificando...</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">Servidor Backend:</span>
+                        <span id="backend-badge" class="status-badge badge-info">Conectando...</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button id="btn-play" class="btn-primary" type="button" disabled>
+                        JOGAR CAPTALVO
+                    </button>
+                    
+                    <button id="btn-import-assets" class="btn-secondary" type="button">
+                        📁 Importar Arquivos do Jogo (.BIG)
+                    </button>
+
+                    <div class="button-grid">
+                        <button id="btn-diag" class="btn-secondary" type="button">
+                            🔬 Diagnósticos
+                        </button>
+                        <button id="btn-toggle-console" class="btn-secondary" type="button">
+                            💻 Console [ ~ ]
+                        </button>
+                        <button id="btn-settings" class="btn-secondary" type="button">
+                            ⚙️ Configurações
+                        </button>
+                        <button id="btn-info" class="btn-secondary" type="button">
+                            ℹ️ Sobre a Alpha
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Progress -->
+                <div id="progress-container">
+                    <div class="progress-header">
+                        <span id="main-progress-status">INICIALIZANDO MOTOR</span>
+                    </div>
+                    <div class="progress-track">
+                        <div id="main-progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div id="main-progress-detail" class="progress-detail">Carregando módulos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Import Assets -->
     <div id="modal-import" class="modal-overlay">
@@ -261,7 +310,7 @@
                     <strong style="display:block; margin-bottom:6px; color:var(--accent-gold);">
                         Clique abaixo para selecionar sua pasta do jogo
                     </strong>
-                    <span style="font-size:11px; color:var(--text-secondary);">
+                    <span style="font-size:11px; color:var(--muted);">
                         Ex: <code>D:\Command and Conquer Generals Zero Hour</code> ou arraste arquivos <code>.big</code> aqui
                     </span>
                 </div>
@@ -302,7 +351,7 @@
                 <div style="margin-bottom: 14px;">
                     <label style="display:flex; justify-content:space-between; align-items:center;">
                         <span>Limite de Taxa de Quadros (FPS):</span>
-                        <select id="setting-fps" style="background:#1a222c; color:var(--text-primary); border:1px solid var(--border-color); padding:6px 10px; border-radius:4px;">
+                        <select id="setting-fps" style="background:#090e0b; color:var(--ink); border:1px solid var(--border-color); padding:6px 10px; border-radius:4px;">
                             <option value="30">30 FPS (Fiel ao original)</option>
                             <option value="60">60 FPS (Recomendado)</option>
                             <option value="120">120 FPS (Alta taxa)</option>
@@ -364,7 +413,7 @@
                 </p>
 
                 <h4>Aviso Legal e Direitos</h4>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+                <p style="font-size:11px; color:var(--muted); line-height:1.5;">
                     <em>Electronic Arts Inc.</em> não patrocinou, endossou ou aprovou este projeto de forma alguma. "Command &amp; Conquer" e "Generals Zero Hour" são marcas registradas da Electronic Arts. O projeto Captalvo não redistribui nenhum arquivo de mídia, áudio, modelo 3D ou mapa proprietário original. Todos os dados são carregados estritamente pelo próprio usuário a partir de sua cópia legítima local.
                 </p>
 
@@ -464,8 +513,11 @@
         </div>
     </div>
 
-    <!-- Captalvo Application Script (Stamping handled by deploy & inline guardian) -->
-    <script src="captalvo-app.js?t=1793750340"></script>
+    <!-- Captalvo Interactive Simulation Script -->
+    <script src="captalvo-home-sim.js?t=1793750870"></script>
+
+    <!-- Captalvo Application Script -->
+    <script src="captalvo-app.js?t=1793750870"></script>
 </body>
 </html>
 
