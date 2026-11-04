@@ -8,7 +8,7 @@
     <meta name="description" content="Projeto Scorpion: Engine WebGPU de alta fidelidade para Command & Conquer: Generals Zero Hour com suporte a auto-reparo e streaming de arquivos em nuvem.">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23020b12'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='18' font-weight='bold' fill='%2300d9ff' text-anchor='middle'%3ESC%3C/text%3E%3C/svg%3E">
 
-    <link rel="stylesheet" crossorigin href="/scorpion/assets/index-DaJE1AVD.css?t=1793809740">
+    <link rel="stylesheet" crossorigin href="/scorpion/assets/index-DaJE1AVD.css?t=1793811238">
 
     <style>
         /* Scorpion Tactical UI Theme & Repair Modal Styles */
@@ -97,8 +97,9 @@
         }
     </style>
 
-    <script type="module" crossorigin src="/scorpion/assets/index-scorpion.js?t=1793809740"></script>
-    <script src="/scorpion/assets/scorpion-repair-ui.js?t=1793809740"></script>
+    <script src="/scorpion/assets/scorpion-intro-video.js?t=1793811238"></script>
+    <script src="/scorpion/assets/scorpion-repair-ui.js?t=1793811238"></script>
+    <script type="module" crossorigin src="/scorpion/assets/index-scorpion.js?t=1793811238"></script>
 </head>
 
 <body class="ogx-body ogx-scanlines">
@@ -113,6 +114,34 @@
         <button id="btn-open-scorpion-repair" class="sc-btn sc-btn-primary" style="font-weight:800; letter-spacing:0.5px;">
             🛠️ REPARAR O JOGO / VERIFICAR ARQUIVOS
         </button>
+    </div>
+
+    <!-- Scorpion Mission Launch Banner (Zero-Wait Briefing) -->
+    <div id="scorpion-launcher-card" style="position:fixed; top:75px; left:50%; transform:translateX(-50%); z-index:99999; width:min(700px, 94vw); background:rgba(2,11,18,0.96); border:1px solid #00d9ff; box-shadow:0 0 40px rgba(0,217,255,0.3); border-radius:8px; padding:22px 26px; font-family:ui-monospace, monospace; backdrop-filter:blur(10px); text-align:center;">
+        <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,217,255,0.12); color:#00d9ff; border:1px solid rgba(0,217,255,0.3); border-radius:4px; padding:4px 10px; font-size:11px; font-weight:700; margin-bottom:12px;">
+            ⚡ PROJETO SCORPION &bull; WEBGPU DUAL-STREAMING
+        </div>
+        <h1 style="margin:0 0 8px 0; font-size:20px; font-weight:800; color:#fff; letter-spacing:0.5px;">
+            COMMAND &amp; CONQUER: GENERALS ZERO HOUR
+        </h1>
+        <p style="margin:0 0 18px 0; font-size:12px; color:#88a0b0; line-height:1.5;">
+            O motor executará o carregamento e pré-carregamento completo em segundo plano enquanto você assiste à introdução oficial de <strong>1m11s</strong>.
+            <br>Ao término do vídeo em alta definição com áudio, o jogo já estará aberto e rodando no menu principal sem necessidade de novos cliques.
+        </p>
+        
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="btn-scorpion-play-intro" class="sc-btn sc-btn-primary" style="font-size:14px; font-weight:800; padding:14px; justify-content:center; letter-spacing:0.5px; box-shadow:0 0 15px rgba(0,217,255,0.5);">
+                ▶ JOGAR ZERO HOUR &bull; ASSISTIR INTRODUÇÃO (1m11s)
+            </button>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button id="btn-scorpion-pick-folder" class="sc-btn" style="flex:1; justify-content:center;" title="Selecionar a pasta com os arquivos locais">
+                    📁 Selecionar Pasta Local (.BIG)
+                </button>
+                <button id="btn-scorpion-open-repair-card" class="sc-btn" style="flex:1; justify-content:center; border-color:#ffaa00; color:#ffaa00;" title="Verificar integridade dos arquivos">
+                    🛠️ Reparar / Verificar Arquivos
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Main Game Container managed by index-scorpion.js -->
@@ -209,5 +238,47 @@
 
         </div>
     </div>
+
+    <!-- Script de Inicialização e Conexão do Briefing Tático (1m11s) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnPlay = document.getElementById('btn-scorpion-play-intro');
+            const btnPick = document.getElementById('btn-scorpion-pick-folder');
+            const btnRepair = document.getElementById('btn-scorpion-open-repair-card');
+            const launcherCard = document.getElementById('scorpion-launcher-card');
+
+            if (btnPlay) {
+                btnPlay.addEventListener('click', () => {
+                    if (launcherCard) launcherCard.style.display = 'none';
+                    if (window.ScorpionIntroManager) {
+                        window.ScorpionIntroManager.playIntroAndBoot(() => {
+                            // Trigger underlying folder pick or boot
+                            const firstrunPick = document.getElementById('pick');
+                            if (firstrunPick) {
+                                firstrunPick.click();
+                            }
+                        });
+                    }
+                });
+            }
+
+            if (btnPick) {
+                btnPick.addEventListener('click', () => {
+                    const firstrunPick = document.getElementById('pick');
+                    if (firstrunPick) {
+                        firstrunPick.click();
+                    }
+                });
+            }
+
+            if (btnRepair) {
+                btnRepair.addEventListener('click', () => {
+                    if (window.CaptalvoScorpionRepair) {
+                        window.CaptalvoScorpionRepair.openModal();
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>

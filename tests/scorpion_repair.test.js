@@ -31,11 +31,15 @@ assert(fs.existsSync(path.join(projectRoot, 'public/scorpion')), 'public/scorpio
 assert(fs.existsSync(path.join(projectRoot, 'public/scorpion/index.html')), 'public/scorpion/index.html must exist');
 assert(fs.existsSync(path.join(projectRoot, 'public/scorpion/assets/index-scorpion.js')), 'public/scorpion/assets/index-scorpion.js must exist');
 assert(fs.existsSync(path.join(projectRoot, 'public/scorpion/assets/scorpion-repair-ui.js')), 'public/scorpion/assets/scorpion-repair-ui.js must exist');
+assert(fs.existsSync(path.join(projectRoot, 'public/scorpion/assets/scorpion-intro-video.js')), 'public/scorpion/assets/scorpion-intro-video.js must exist');
+assert(fs.existsSync(path.join(projectRoot, 'public/Command-Conquer-Generals-Zero-Hour-Intro-1080p.mp4')), '1080p intro video must exist in public/');
 
 const scIndex = fs.readFileSync(path.join(projectRoot, 'public/scorpion/index.html'), 'utf8');
 assert(scIndex.includes('PROJETO SCORPION'), 'Scorpion index must contain Project Scorpion branding');
 assert(scIndex.includes('/scorpion/assets/index-scorpion.js'), 'Scorpion index must link index-scorpion.js');
 assert(scIndex.includes('/scorpion/assets/scorpion-repair-ui.js'), 'Scorpion index must link scorpion-repair-ui.js');
+assert(scIndex.includes('/scorpion/assets/scorpion-intro-video.js'), 'Scorpion index must link scorpion-intro-video.js');
+assert(scIndex.includes('btn-scorpion-play-intro'), 'Scorpion index must have 1m11s play button');
 assert(scIndex.includes('modal-scorpion-repair'), 'Scorpion index must contain modal-scorpion-repair');
 
 const scJs = fs.readFileSync(path.join(projectRoot, 'public/scorpion/assets/index-scorpion.js'), 'utf8');
@@ -43,7 +47,14 @@ assert(!scJs.includes('/webgpu/GeneralsXZH.js'), 'Scorpion JS must not point to 
 assert(scJs.includes('/scorpion/GeneralsXZH.js'), 'Scorpion JS must point to /scorpion/GeneralsXZH.js');
 assert(scJs.includes('captalvo_scorpion'), 'Scorpion JS must use isolated database captalvo_scorpion');
 assert(scJs.includes('/api/repair.php?action=catalog'), 'Scorpion JS must query repair catalog for cloud gap filling');
-console.log('✓ Project Scorpion is completely isolated, self-contained and configured.');
+assert(scJs.includes('__scorpionSetEngineReady'), 'Scorpion JS must hook MainMenu completion');
+assert(scJs.includes('GeneralsXMuteAudio'), 'Scorpion JS must support audio muting during video intro');
+
+const introJs = fs.readFileSync(path.join(projectRoot, 'public/scorpion/assets/scorpion-intro-video.js'), 'utf8');
+assert(introJs.includes('Command-Conquer-Generals-Zero-Hour-Intro-1080p.mp4'), 'Intro script must load 1080p video');
+assert(introJs.includes('transitionToGame'), 'Intro script must contain automatic transition to game');
+assert(introJs.includes('GeneralsXMuteAudio(false)'), 'Intro script must unmute game audio when video concludes');
+console.log('✓ Project Scorpion with 1m11s Intro Preloader is completely isolated and verified.');
 
 // 3. Repair API Backend (public/api/repair.php)
 console.log('\nChecking Repair API Backend (public/api/repair.php)...');
